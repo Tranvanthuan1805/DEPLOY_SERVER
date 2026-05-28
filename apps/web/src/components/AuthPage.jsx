@@ -1,333 +1,332 @@
 import { useState } from 'react';
-import { HiMail, HiLockClosed, HiUser, HiBookOpen, HiIdentification, HiArrowLeft } from 'react-icons/hi';
+import { HiMail, HiLockClosed, HiUser, HiBookOpen, HiArrowLeft, HiEye, HiEyeOff, HiCheckCircle, HiExclamationCircle } from 'react-icons/hi';
 
-export default function AuthPage({ defaultMode = 'login', onAuthSuccess, usersList, addLog }) {
-  const [mode, setMode] = useState(defaultMode); // 'login', 'signup', or 'forgot'
-  
-  // Form values
+export default function AuthPage({ defaultMode = 'login', onAuthSuccess, usersList, addLog, onBackToLanding }) {
+  const [mode, setMode] = useState(defaultMode);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [combo, setCombo] = useState('A01 (Toán – Lý – Anh)');
-  const [userRole, setUserRole] = useState('student'); // 'student' or 'teacher'
-
-  // Reset password state
+  const [userRole, setUserRole] = useState('student');
   const [resetEmail, setResetEmail] = useState('');
   const [resetSuccess, setResetSuccess] = useState(false);
-
   const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const switchMode = (m) => {
+    setMode(m);
+    setErrorMessage('');
+    setSuccessMessage('');
+    setName('');
+    setPassword('');
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     setErrorMessage('');
+    setSuccessMessage('');
+    setLoading(true);
 
-    if (mode === 'login') {
-      // Validate login
-      if (email === 'admin@edupath.vn' && password === 'admin123') {
-        const adminUser = {
-          name: 'Quản trị viên Hệ thống',
-          email: 'admin@edupath.vn',
-          role: 'admin',
-          avatar: 'AD'
+    setTimeout(() => {
+      setLoading(false);
+
+      if (mode === 'login') {
+        if (email === 'admin@edupath.vn' && password === 'admin123') {
+          addLog('Quản trị viên đăng nhập thành công', 'sys');
+          onAuthSuccess({ name: 'Quản trị viên Hệ thống', email: 'admin@edupath.vn', role: 'admin', avatar: 'AD' });
+          return;
+        }
+        const matched = usersList.find(u => u.email === email && u.password === password);
+        if (matched) {
+          if (matched.isBanned) {
+            setErrorMessage('Tài khoản của bạn đã bị khóa do vi phạm chính sách hệ thống.');
+            return;
+          }
+          if (matched.status === 'pending') {
+            setErrorMessage('Tài khoản Giáo viên đang chờ Admin phê duyệt. Vui lòng thử lại sau.');
+            return;
+          }
+          addLog(`"${matched.name}" đăng nhập thành công — vai trò: ${matched.role.toUpperCase()}`, 'sys');
+          onAuthSuccess(matched);
+        } else {
+          setErrorMessage('Email hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại.');
+        }
+
+      } else if (mode === 'signup') {
+        if (!name.trim() || !email.trim() || !password.trim()) {
+          setErrorMessage('Vui lòng điền đầy đủ tất cả các trường bắt buộc.');
+          return;
+        }
+        if (password.length < 6) {
+          setErrorMessage('Mật khẩu phải có ít nhất 6 ký tự.');
+          return;
+        }
+        if (usersList.find(u => u.email === email) || email === 'admin@edupath.vn') {
+          setErrorMessage('Email này đã được đăng ký bởi tài khoản khác.');
+          return;
+        }
+
+        const newUser = {
+          id: Date.now(),
+          name,
+          email,
+          password,
+          role: userRole,
+          combo: userRole === 'student' ? combo : '',
+          grade: userRole === 'student' ? '12' : '',
+          avatar: name.substring(0, 2).toUpperCase(),
+          isBanned: false,
+          status: userRole === 'teacher' ? 'pending' : 'active',
+          unlockedCourses: [],
         };
-        addLog(`Quản trị viên đăng nhập hệ thống thành công`, 'sys');
-        onAuthSuccess(adminUser);
-        return;
-      }
 
-      // Check registered list
-      const matched = usersList.find(u => u.email === email && u.password === password);
-      if (matched) {
-        if (matched.isBanned) {
-          setErrorMessage('Tài khoản của bạn đã bị Quản trị viên khóa do vi phạm chính sách của hệ thống.');
-          addLog(`Đăng nhập thất bại: Tài khoản bị khóa (${email})`, 'sys');
-          return;
-        }
-        if (matched.status === 'pending') {
-          setErrorMessage('Tài khoản Giáo viên đang chờ Quản trị viên duyệt hồ sơ. Vui lòng thử lại sau.');
-          addLog(`Đăng nhập thất bại: Tài khoản Giáo viên chưa được duyệt (${email})`, 'sys');
-          return;
+        addLog(`Tài khoản mới: "${name}" (${email}) — Vai trò: ${userRole.toUpperCase()}`, 'sys');
+        onAuthSuccess(null, newUser);
+
+        if (userRole === 'teacher') {
+          setSuccessMessage('Đăng ký Giáo viên thành công! Hồ sơ của bạn đang chờ Admin phê duyệt.');
+          setEmail(email);
+          setPassword('');
+          setMode('login');
+        } else {
+          setSuccessMessage('Đăng ký thành công! Hãy đăng nhập để bắt đầu học.');
+          setEmail(email);
+          setPassword('');
+          setMode('login');
         }
 
-        addLog(`Người dùng "${matched.name}" đăng nhập thành công với vai trò: ${matched.role.toUpperCase()}`, 'sys');
-        onAuthSuccess(matched);
-      } else {
-        setErrorMessage('Email đăng nhập hoặc mật khẩu không chính xác!');
-        addLog(`Đăng nhập thất bại: Sai thông tin truy cập (${email})`, 'sys');
+      } else if (mode === 'forgot') {
+        if (!resetEmail.trim()) return;
+        addLog(`Yêu cầu khôi phục mật khẩu: ${resetEmail}`, 'sys');
+        setResetSuccess(true);
       }
-    } else if (mode === 'signup') {
-      // Sign Up flow
-      if (!name.trim() || !email.trim() || !password.trim()) {
-        setErrorMessage('Vui lòng nhập đầy đủ các trường thông tin bắt buộc!');
-        return;
-      }
-      if (password.length < 6) {
-        setErrorMessage('Mật khẩu bảo mật phải có độ dài tối thiểu 6 ký tự!');
-        return;
-      }
-
-      // Check if email already exists
-      const exists = usersList.find(u => u.email === email);
-      if (exists || email === 'admin@edupath.vn') {
-        setErrorMessage('Địa chỉ Email này đã được đăng ký sử dụng bởi tài khoản khác!');
-        return;
-      }
-
-      const newUser = {
-        id: Date.now(),
-        name,
-        email,
-        password,
-        role: userRole,
-        combo: userRole === 'student' ? combo : '',
-        grade: userRole === 'student' ? '12' : '',
-        avatar: name.substring(0, 2).toUpperCase(),
-        isBanned: false,
-        status: userRole === 'teacher' ? 'pending' : 'active'
-      };
-
-      addLog(`Tài khoản mới được đăng ký: "${name}" (${email}) - Vai trò: ${userRole.toUpperCase()}`, 'sys');
-      
-      if (userRole === 'teacher') {
-        alert('Đăng ký tài khoản Giáo viên thành công! Hồ sơ của thầy/cô đã được gửi lên hệ thống kiểm duyệt. Trạng thái: Chờ Admin cấp duyệt.');
-        setMode('login');
-        setEmail(email);
-        setPassword('');
-      } else {
-        alert('Đăng ký tài khoản Học viên thành công! Hãy đăng nhập để bắt đầu trải nghiệm lộ trình ôn tập.');
-        setMode('login');
-        setEmail(email);
-        setPassword('');
-      }
-      
-      // Save new user trigger back to parent list
-      onAuthSuccess(null, newUser); 
-    } else {
-      // Forgot Password flow
-      if (!resetEmail.trim()) return;
-      
-      addLog(`Yêu cầu khôi phục mật khẩu cho email: ${resetEmail}`, 'sys');
-      setResetSuccess(true);
-      setTimeout(() => {
-        alert(`Mã OTP khôi phục mật khẩu đã được gửi đến email: ${resetEmail}! Vui lòng kiểm tra hộp thư đến.`);
-      }, 500);
-    }
+    }, 600);
   };
 
   return (
-    <div className="animate-in" style={{ padding: '40px 0' }}>
-      <div className="auth-form-container animate-in" style={{ border: '1px solid var(--border)' }}>
-        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-          <div className="logo-icon" style={{ width: 44, height: 44, background: 'linear-gradient(135deg, #6C5CE7, #FD79A8)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 22, fontWeight: 900, margin: '0 auto 10px auto' }}>E</div>
-          <h2 style={{ fontSize: '18px', fontWeight: '800' }}>
-            {mode === 'login' ? 'ĐĂNG NHẬP EDUPATH AI' : (mode === 'signup' ? 'ĐĂNG KÝ THÀNH VIÊN MỚI' : 'KHÔI PHỤC MẬT KHẨU')}
-          </h2>
-          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-            Học thông minh · Luyện thi thích ứng THPTQG
-          </p>
-        </div>
-
-        {errorMessage && (
-          <div style={{ background: 'rgba(231,76,60,0.1)', color: 'var(--accent-red)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', fontSize: '12px', marginBottom: '16px', border: '1px solid rgba(231,76,60,0.2)' }}>
-            ⚠️ {errorMessage}
+    <div className="auth-page-layout">
+      {/* Left branding panel */}
+      <div className="auth-brand-panel">
+        <div className="auth-brand-content">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 32 }}>
+            <div className="nav-logo-icon" style={{ width: 44, height: 44, fontSize: 22 }}>E</div>
+            <span style={{ fontSize: '20px', fontWeight: '800', color: '#fff' }}>EduPath AI</span>
           </div>
-        )}
 
-        {/* ================= FORGOT PASSWORD LAYOUT ================= */}
-        {mode === 'forgot' ? (
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            {!resetSuccess ? (
-              <>
-                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5', marginBottom: '10px' }}>
-                  Vui lòng nhập email tài khoản đã đăng ký của bạn. Chúng tôi sẽ gửi liên kết khôi phục mật khẩu tức thì.
-                </p>
-                <div className="form-group">
-                  <label style={{ fontSize: '11px', fontWeight: '700' }}>Nhập Email khôi phục:</label>
-                  <div style={{ position: 'relative' }}>
-                    <HiMail style={{ position: 'absolute', top: '12px', left: '12px', color: 'var(--text-muted)' }} />
-                    <input
-                      type="email"
-                      className="form-control"
-                      style={{ paddingLeft: '36px', width: '100%' }}
-                      placeholder="email@example.com"
-                      value={resetEmail}
-                      onChange={e => setResetEmail(e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-                <button type="submit" className="btn-primary" style={{ width: '100%', padding: '12px', fontWeight: 'bold' }}>
-                  Gửi liên kết đặt lại mật khẩu
-                </button>
-              </>
-            ) : (
-              <div style={{ textAlign: 'center', padding: '10px 0' }}>
-                <div style={{ color: 'var(--accent-green)', fontSize: '13px', fontWeight: 'bold', marginBottom: '12px' }}>
-                  ✓ Đã gửi liên kết thành công!
-                </div>
-                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5', marginBottom: '20px' }}>
-                  Vui lòng kiểm tra hộp thư đến của email <strong>{resetEmail}</strong> để hoàn tất việc lấy lại mật khẩu.
-                </p>
-              </div>
-            )}
+          <h2 style={{ fontSize: '28px', fontWeight: '900', color: '#fff', lineHeight: 1.3, marginBottom: 16 }}>
+            Học thông minh.<br />Thi thật tự tin.
+          </h2>
+          <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: '14px', lineHeight: 1.7, marginBottom: 32 }}>
+            Nền tảng luyện thi THPTQG được hơn 42,500 học sinh tin chọn, với AI cá nhân hóa lộ trình và phân tích lỗ hổng kiến thức tức thì.
+          </p>
 
-            <button
-              type="button"
-              className="btn-outline"
-              style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center', width: '100%' }}
-              onClick={() => {
-                setMode('login');
-                setResetSuccess(false);
-                setResetEmail('');
-              }}
-            >
-              <HiArrowLeft /> Quay lại Đăng nhập
-            </button>
-          </form>
-        ) : (
-          /* ================= LOGIN & REGISTER LAYOUT ================= */
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            {mode === 'signup' && (
-              <div className="form-group">
-                <label style={{ fontSize: '11px', fontWeight: '700' }}>Họ và tên của bạn:</label>
-                <div style={{ position: 'relative' }}>
-                  <HiUser style={{ position: 'absolute', top: '12px', left: '12px', color: 'var(--text-muted)' }} />
-                  <input
-                    type="text"
-                    className="form-control"
-                    style={{ paddingLeft: '36px', width: '100%' }}
-                    placeholder="Ví dụ: Nguyễn Minh Anh"
-                    value={name}
-                    onChange={e => setName(e.target.value)}
-                    required
-                  />
-                </div>
+          <div className="auth-brand-stats">
+            {[
+              { v: '42,500+', l: 'Học sinh' },
+              { v: '98.4%', l: 'Đạt mục tiêu' },
+              { v: '27+', l: 'Điểm THPTQG' },
+            ].map((s, i) => (
+              <div key={i} className="auth-brand-stat">
+                <span className="auth-brand-stat-value">{s.v}</span>
+                <span className="auth-brand-stat-label">{s.l}</span>
               </div>
-            )}
+            ))}
+          </div>
 
-            <div className="form-group">
-              <label style={{ fontSize: '11px', fontWeight: '700' }}>Địa chỉ Email đăng nhập:</label>
-              <div style={{ position: 'relative' }}>
-                <HiMail style={{ position: 'absolute', top: '12px', left: '12px', color: 'var(--text-muted)' }} />
-                <input
-                  type="email"
-                  className="form-control"
-                  style={{ paddingLeft: '36px', width: '100%' }}
-                  placeholder="email@example.com"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  required
-                />
-              </div>
+          <div className="auth-brand-quote">
+            <p>"EduPath giúp mình biết chính xác cần ôn gì mỗi ngày. Điểm tăng từ 6.5 lên 9.2 chỉ trong 3 tháng!"</p>
+            <span>— Trần Ngọc Bích, Khối A01</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Right form panel */}
+      <div className="auth-form-panel">
+        <div className="auth-form-wrapper">
+          {/* Back button */}
+          <button className="auth-back-btn" onClick={onBackToLanding}>
+            <HiArrowLeft />
+            Về trang chủ
+          </button>
+
+          <div className="auth-form-header">
+            <h2>
+              {mode === 'login' && 'Chào mừng trở lại!'}
+              {mode === 'signup' && 'Tạo tài khoản mới'}
+              {mode === 'forgot' && 'Khôi phục mật khẩu'}
+            </h2>
+            <p>
+              {mode === 'login' && 'Đăng nhập để tiếp tục lộ trình học của bạn.'}
+              {mode === 'signup' && 'Đăng ký miễn phí — không cần thẻ tín dụng.'}
+              {mode === 'forgot' && 'Nhập email để nhận liên kết đặt lại mật khẩu.'}
+            </p>
+          </div>
+
+          {/* Alerts */}
+          {errorMessage && (
+            <div className="auth-alert error">
+              <HiExclamationCircle />
+              {errorMessage}
             </div>
-
-            <div className="form-group">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <label style={{ fontSize: '11px', fontWeight: '700' }}>Mật khẩu bảo mật:</label>
-                {mode === 'login' && (
-                  <span
-                    onClick={() => { setMode('forgot'); setErrorMessage(''); }}
-                    style={{ color: 'var(--primary)', cursor: 'pointer', fontSize: '11.5px', fontWeight: 'bold' }}
-                  >
-                    Quên mật khẩu?
-                  </span>
-                )}
-              </div>
-              <div style={{ position: 'relative' }}>
-                <HiLockClosed style={{ position: 'absolute', top: '12px', left: '12px', color: 'var(--text-muted)' }} />
-                <input
-                  type="password"
-                  className="form-control"
-                  style={{ paddingLeft: '36px', width: '100%' }}
-                  placeholder="Tối thiểu 6 ký tự"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  required
-                />
-              </div>
+          )}
+          {successMessage && (
+            <div className="auth-alert success">
+              <HiCheckCircle />
+              {successMessage}
             </div>
+          )}
 
-            {mode === 'signup' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', borderTop: '1px solid var(--border)', paddingTop: '12px', marginTop: '4px' }}>
-                <div className="form-group">
-                  <label style={{ fontSize: '11px', fontWeight: '700' }}>Bạn là:</label>
-                  <div style={{ display: 'flex', gap: '14px', marginTop: '4px' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '12px', cursor: 'pointer' }}>
-                      <input type="radio" name="roleSelector" checked={userRole === 'student'} onChange={() => setUserRole('student')} />
-                      Học sinh ôn thi THPTQG
-                    </label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '12px', cursor: 'pointer' }}>
-                      <input type="radio" name="roleSelector" checked={userRole === 'teacher'} onChange={() => setUserRole('teacher')} />
-                      Giảng viên ôn luyện
-                    </label>
-                  </div>
-                </div>
-
-                {userRole === 'student' && (
-                  <div className="form-group">
-                    <label style={{ fontSize: '11px', fontWeight: '700' }}>Khối thi / Tổ hợp mục tiêu:</label>
-                    <div style={{ position: 'relative' }}>
-                      <HiBookOpen style={{ position: 'absolute', top: '12px', left: '12px', color: 'var(--text-muted)' }} />
-                      <select
-                        className="form-control"
-                        style={{ paddingLeft: '36px', width: '100%', appearance: 'none' }}
-                        value={combo}
-                        onChange={e => setCombo(e.target.value)}
-                      >
-                        <option value="A01 (Toán – Lý – Anh)">A01 (Toán – Lý – Anh)</option>
-                        <option value="B00 (Toán – Hóa – Sinh)">B00 (Toán – Hóa – Sinh)</option>
-                        <option value="D01 (Toán – Văn – Anh)">D01 (Toán – Văn – Anh)</option>
-                      </select>
+          {/* FORGOT PASSWORD */}
+          {mode === 'forgot' ? (
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {!resetSuccess ? (
+                <>
+                  <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                    Nhập email đã đăng ký. Chúng tôi sẽ gửi liên kết đặt lại mật khẩu ngay.
+                  </p>
+                  <div className="auth-input-group">
+                    <label>Địa chỉ Email</label>
+                    <div className="auth-input-wrap">
+                      <HiMail className="auth-input-icon" />
+                      <input type="email" placeholder="email@example.com" value={resetEmail} onChange={e => setResetEmail(e.target.value)} required />
                     </div>
                   </div>
-                )}
+                  <button type="submit" className="btn-primary auth-submit-btn" disabled={loading}>
+                    {loading ? 'Đang gửi...' : 'Gửi liên kết đặt lại mật khẩu'}
+                  </button>
+                </>
+              ) : (
+                <div className="auth-alert success" style={{ flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <HiCheckCircle />
+                    <strong>Đã gửi thành công!</strong>
+                  </div>
+                  <p style={{ fontSize: '13px' }}>Kiểm tra hộp thư đến của <strong>{resetEmail}</strong> để hoàn tất đặt lại mật khẩu.</p>
+                </div>
+              )}
+              <button type="button" className="auth-link-btn" onClick={() => { switchMode('login'); setResetSuccess(false); setResetEmail(''); }}>
+                <HiArrowLeft style={{ marginRight: 4 }} /> Quay lại đăng nhập
+              </button>
+            </form>
+
+          ) : (
+            /* LOGIN & SIGNUP */
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+              {mode === 'signup' && (
+                <div className="auth-input-group">
+                  <label>Họ và tên <span className="required">*</span></label>
+                  <div className="auth-input-wrap">
+                    <HiUser className="auth-input-icon" />
+                    <input type="text" placeholder="Ví dụ: Nguyễn Minh Anh" value={name} onChange={e => setName(e.target.value)} required />
+                  </div>
+                </div>
+              )}
+
+              <div className="auth-input-group">
+                <label>Địa chỉ Email <span className="required">*</span></label>
+                <div className="auth-input-wrap">
+                  <HiMail className="auth-input-icon" />
+                  <input type="email" placeholder="email@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
+                </div>
               </div>
-            )}
 
-            <button type="submit" className="btn-primary" style={{ width: '100%', padding: '12px', fontWeight: 'bold', fontSize: '13.5px', marginTop: '6px' }}>
-              {mode === 'login' ? 'Đăng nhập vào hệ thống' : 'Đăng ký thành viên'}
-            </button>
-          </form>
-        )}
+              <div className="auth-input-group">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <label style={{ margin: 0 }}>Mật khẩu <span className="required">*</span></label>
+                  {mode === 'login' && (
+                    <button type="button" className="auth-link-inline" onClick={() => switchMode('forgot')}>
+                      Quên mật khẩu?
+                    </button>
+                  )}
+                </div>
+                <div className="auth-input-wrap">
+                  <HiLockClosed className="auth-input-icon" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Tối thiểu 6 ký tự"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    required
+                  />
+                  <button type="button" className="auth-eye-btn" onClick={() => setShowPassword(!showPassword)} tabIndex={-1}>
+                    {showPassword ? <HiEyeOff /> : <HiEye />}
+                  </button>
+                </div>
+              </div>
 
-        {mode !== 'forgot' && (
-          <div style={{ textAlign: 'center', marginTop: '20px', fontSize: '12px', borderTop: '1px solid var(--border)', paddingTop: '14px', color: 'var(--text-secondary)' }}>
-            {mode === 'login' ? (
-              <>
-                Bạn chưa có tài khoản?{' '}
-                <span onClick={() => { setMode('signup'); setErrorMessage(''); }} style={{ color: 'var(--primary)', fontWeight: 'bold', cursor: 'pointer' }}>
-                  Đăng ký ngay
-                </span>
-              </>
-            ) : (
-              <>
-                Bạn đã có tài khoản thành viên?{' '}
-                <span onClick={() => { setMode('login'); setErrorMessage(''); }} style={{ color: 'var(--primary)', fontWeight: 'bold', cursor: 'pointer' }}>
-                  Đăng nhập
-                </span>
-              </>
-            )}
-          </div>
-        )}
+              {mode === 'signup' && (
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div className="auth-input-group">
+                    <label>Bạn là:</label>
+                    <div className="auth-role-selector">
+                      <label className={`auth-role-option${userRole === 'student' ? ' selected' : ''}`}>
+                        <input type="radio" name="role" value="student" checked={userRole === 'student'} onChange={() => setUserRole('student')} />
+                        <span>🎒 Học sinh ôn thi</span>
+                      </label>
+                      <label className={`auth-role-option${userRole === 'teacher' ? ' selected' : ''}`}>
+                        <input type="radio" name="role" value="teacher" checked={userRole === 'teacher'} onChange={() => setUserRole('teacher')} />
+                        <span>🎓 Giảng viên</span>
+                      </label>
+                    </div>
+                  </div>
 
-        {mode === 'login' && (
-          <div style={{ marginTop: '16px', background: 'var(--bg-main)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '12px', fontSize: '11px', lineHeight: '1.5' }}>
-            🔑 <strong>HỆ THỐNG TÀI KHOẢN DEMO THỬ NGHIỆM:</strong><br />
-            <div style={{ marginTop: '6px' }}>
-              <strong>1. Tài khoản Học sinh (Student):</strong><br />
-              - Email: <code style={{ color: 'var(--primary)' }}>student@gmail.com</code> • Mật khẩu: <code style={{ color: 'var(--primary)' }}>student123</code>
-            </div>
-            <div style={{ marginTop: '6px' }}>
-              <strong>2. Tài khoản Giáo viên (Teacher):</strong><br />
-              - Email: <code style={{ color: 'var(--primary)' }}>teacher@gmail.com</code> • Mật khẩu: <code style={{ color: 'var(--primary)' }}>teacher123</code>
-            </div>
-            <div style={{ marginTop: '6px' }}>
-              <strong>3. Tài khoản Quản trị viên (Admin):</strong><br />
-              - Email: <code style={{ color: 'var(--primary)' }}>admin@edupath.vn</code> • Mật khẩu: <code style={{ color: 'var(--primary)' }}>admin123</code>
-            </div>
-          </div>
-        )}
+                  {userRole === 'student' && (
+                    <div className="auth-input-group">
+                      <label>Khối thi mục tiêu <span className="required">*</span></label>
+                      <div className="auth-input-wrap">
+                        <HiBookOpen className="auth-input-icon" />
+                        <select value={combo} onChange={e => setCombo(e.target.value)} style={{ appearance: 'none' }}>
+                          <option value="A01 (Toán – Lý – Anh)">A01 — Toán, Vật lý, Tiếng Anh</option>
+                          <option value="B00 (Toán – Hóa – Sinh)">B00 — Toán, Hóa học, Sinh học</option>
+                          <option value="D01 (Toán – Văn – Anh)">D01 — Toán, Ngữ văn, Tiếng Anh</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <button type="submit" className="btn-primary auth-submit-btn" disabled={loading}>
+                {loading ? 'Đang xử lý...' : mode === 'login' ? 'Đăng nhập' : 'Tạo tài khoản'}
+              </button>
+            </form>
+          )}
+
+          {mode !== 'forgot' && (
+            <p className="auth-switch-mode">
+              {mode === 'login' ? (
+                <>Chưa có tài khoản? <button type="button" onClick={() => switchMode('signup')}>Đăng ký miễn phí</button></>
+              ) : (
+                <>Đã có tài khoản? <button type="button" onClick={() => switchMode('login')}>Đăng nhập ngay</button></>
+              )}
+            </p>
+          )}
+
+          {/* Demo hint - collapsible */}
+          {mode === 'login' && <DemoHint />}
+        </div>
       </div>
+    </div>
+  );
+}
+
+function DemoHint() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="demo-hint-box">
+      <button className="demo-hint-toggle" onClick={() => setOpen(!open)}>
+        🔑 Tài khoản demo thử nghiệm {open ? '▲' : '▼'}
+      </button>
+      {open && (
+        <div className="demo-hint-content">
+          <div><strong>Học sinh:</strong> student@gmail.com / student123</div>
+          <div><strong>Giáo viên:</strong> teacher@gmail.com / teacher123</div>
+          <div><strong>Admin:</strong> admin@edupath.vn / admin123</div>
+        </div>
+      )}
     </div>
   );
 }

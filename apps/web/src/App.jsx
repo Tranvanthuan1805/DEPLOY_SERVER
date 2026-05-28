@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import LearningPath from './components/LearningPath';
@@ -20,7 +20,42 @@ import TeacherDashboard from './components/TeacherDashboard';
 import AdminDashboard from './components/AdminDashboard';
 import AISystemCenter from './components/AISystemCenter';
 
-import { HiPlay, HiDocumentDownload } from 'react-icons/hi';
+import { HiPlay, HiDocumentDownload, HiBeaker, HiX } from 'react-icons/hi';
+
+function DemoPanel({ onQuickLogin }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ position: 'fixed', bottom: 20, right: 20, zIndex: 9999 }}>
+      {open && (
+        <div className="demo-controller animate-in" style={{ marginBottom: 8 }}>
+          <div className="demo-controller-header">
+            <h4>Demo — Đăng nhập nhanh</h4>
+            <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>✕</button>
+          </div>
+          <div className="demo-role-btns" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+            <button className="demo-role-btn" onClick={() => { onQuickLogin('student'); setOpen(false); }}>🎒 Học sinh</button>
+            <button className="demo-role-btn" onClick={() => { onQuickLogin('teacher'); setOpen(false); }}>🎓 Giáo viên</button>
+            <button className="demo-role-btn" onClick={() => { onQuickLogin('admin'); setOpen(false); }}>🛡️ Admin</button>
+          </div>
+        </div>
+      )}
+      <button
+        onClick={() => setOpen(!open)}
+        style={{
+          width: 44, height: 44, borderRadius: '50%',
+          background: 'var(--primary)', color: '#fff',
+          border: 'none', cursor: 'pointer', fontSize: 18,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: '0 4px 14px rgba(108,92,231,0.5)',
+          transition: 'all 0.2s',
+        }}
+        title="Demo login"
+      >
+        {open ? '✕' : '⚡'}
+      </button>
+    </div>
+  );
+}
 
 // Initial Database preloads
 const initialCourses = [
@@ -221,7 +256,7 @@ export default function App() {
     addLog(`Người dùng "${currentUser?.name}" đăng xuất an toàn khỏi hệ thống`, 'sys');
     setCurrentUser(null);
     setRole('guest');
-    setActiveTab('landing');
+    setActiveTab('home');
     setActiveCourseDetails(null);
     setActiveTestSimulator(null);
     setCheckoutCourse(null);
@@ -407,17 +442,7 @@ export default function App() {
           {/* ================= GUEST PUBLIC PREVIEW ================= */}
           {role === 'guest' && (
             <div>
-              {activeTab === 'landing' || activeTab === 'home' ? (
-                <LandingPage
-                  onNavigateToAuth={(mode) => {
-                    setActiveTab(mode);
-                  }}
-                  onNavigateToTeacherSignup={() => {
-                    setActiveTab('signup');
-                    setUserRole('teacher');
-                  }}
-                />
-              ) : (
+              {activeTab === 'login' || activeTab === 'signup' ? (
                 <AuthPage
                   defaultMode={activeTab === 'signup' ? 'signup' : 'login'}
                   onAuthSuccess={(user, newlyRegistered) => {
@@ -429,6 +454,11 @@ export default function App() {
                   }}
                   usersList={usersList}
                   addLog={addLog}
+                  onBackToLanding={() => setActiveTab('home')}
+                />
+              ) : (
+                <LandingPage
+                  onNavigateToAuth={(mode) => setActiveTab(mode)}
                 />
               )}
             </div>
@@ -438,90 +468,112 @@ export default function App() {
           {role === 'student' && !activeCourseDetails && !activeTestSimulator && (
             <div>
               {activeTab === 'home' && (
-                <div style={{ display: 'grid', gridTemplateColumns: '2.5fr 1fr', gap: '20px' }}>
-                  {/* Left column */}
-                  <div>
-                    {/* Learning Path roadmap card */}
-                    <div className="card learning-path animate-in">
-                      <div className="card-header">
-                        <h3>LỘ TRÌNH HỌC TẬP TÍCH HỢP AI CỦA BẠN</h3>
-                        <button className="link" onClick={() => setActiveTab('path')} style={{ background: 'none', border: 'none', font: 'inherit', color: 'var(--primary)', cursor: 'pointer' }}>Chi tiết lộ trình</button>
-                      </div>
-                      <div className="path-info-row">
-                        <div className="path-info">
-                          <p className="path-goal">Mục tiêu: <strong>Đạt 27+ điểm tốt nghiệp THPTQG</strong></p>
-                          <p className="path-combo">Khối ôn luyện hiện tại: {currentUser?.combo || 'A01'}</p>
-                        </div>
-                        <div className="path-days">
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Thời gian còn lại</span>
-                          <div style={{ fontSize: '32px', fontWeight: '900', color: 'var(--text-primary)' }}>180 <span style={{ fontSize: '14px', fontWeight: 'normal', color: 'var(--text-secondary)' }}>ngày</span></div>
-                        </div>
-                      </div>
-                      <LearningPath />
-                    </div>
-
-                    {/* Recommendations */}
-                    <div className="card recommendations animate-in">
-                      <div className="card-header">
-                        <h3>ĐỀ XUẤT CÁ NHÂN HÓA DÀNH CHO BẠN</h3>
-                        <span className="badge-pill" style={{ background: 'var(--primary-bg)', color: 'var(--primary)', fontWeight: 'bold' }}>AI gợi ý bài học</span>
-                      </div>
-                      <div className="rec-grid">
-                        <div className="rec-card" onClick={() => {
-                          const course = activeUserCourses.find(c => c.id === 1);
-                          if (course) setActiveCourseDetails(course);
-                        }}>
-                          <span className="rec-badge lesson">Bài học đề xuất</span>
-                          <h4>Hàm số bậc 2 và đồ thị</h4>
-                          <p className="rec-subject">Toán học</p>
-                          <div className="rec-card-footer">
-                            <span className="rec-time">⏱ 45 phút</span>
-                            <button className="rec-play">▶</button>
-                          </div>
-                        </div>
-
-                        <div className="rec-card" onClick={() => setActiveTestSimulator("Bài tập củng cố Đạo hàm")}>
-                          <span className="rec-badge exercise">Bài tự luyện</span>
-                          <h4>Bài tập sửa sai Khảo sát hàm số</h4>
-                          <p className="rec-subject">Toán học</p>
-                          <div className="rec-card-footer">
-                            <span className="rec-time">⏱ 5 câu hỏi</span>
-                            <button className="rec-play">▶</button>
-                          </div>
-                        </div>
-
-                        <div className="rec-card" onClick={() => setActiveTab('ai-qa')}>
-                          <span className="rec-badge review">Tutor AI</span>
-                          <h4>Hỏi đáp EduBot về Dao động cơ</h4>
-                          <p className="rec-subject">Vật lý</p>
-                          <div className="rec-card-footer">
-                            <span className="rec-time">⏱ Trực tuyến</span>
-                            <button className="rec-play">💬</button>
-                          </div>
-                        </div>
+                <div>
+                  {/* Welcome stats row */}
+                  <div className="dashboard-stats-row animate-in">
+                    <div className="dash-stat-card">
+                      <div className="dash-stat-icon" style={{ background: 'rgba(108,92,231,0.12)', color: 'var(--primary)' }}>🎯</div>
+                      <div>
+                        <div className="dash-stat-value">27+</div>
+                        <div className="dash-stat-label">Điểm mục tiêu</div>
                       </div>
                     </div>
-
-                    <ProgressChart />
+                    <div className="dash-stat-card">
+                      <div className="dash-stat-icon" style={{ background: 'rgba(243,156,18,0.12)', color: 'var(--accent-orange)' }}>🔥</div>
+                      <div>
+                        <div className="dash-stat-value">7 ngày</div>
+                        <div className="dash-stat-label">Học liên tiếp</div>
+                      </div>
+                    </div>
+                    <div className="dash-stat-card">
+                      <div className="dash-stat-icon" style={{ background: 'rgba(0,184,148,0.12)', color: 'var(--accent-green)' }}>📈</div>
+                      <div>
+                        <div className="dash-stat-value">72%</div>
+                        <div className="dash-stat-label">Tiến độ lộ trình</div>
+                      </div>
+                    </div>
+                    <div className="dash-stat-card">
+                      <div className="dash-stat-icon" style={{ background: 'rgba(9,132,227,0.12)', color: 'var(--accent-blue)' }}>⏰</div>
+                      <div>
+                        <div className="dash-stat-value">180 ngày</div>
+                        <div className="dash-stat-label">Đến kỳ thi</div>
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Right Column */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                    <StreakCard />
-                    <PerformanceCard />
-                    <UpcomingTests />
-                    
-                    <div className="card chatbot-card animate-in" onClick={() => setActiveTab('ai-qa')} style={{ cursor: 'pointer' }}>
-                      <div className="chatbot-header">
-                        <h3>Trợ lý AI EduBot</h3>
-                        <span className="ai-badge">AI</span>
+                  <div className="dashboard-main-grid">
+                    {/* Left column */}
+                    <div>
+                      <div className="card learning-path animate-in">
+                        <div className="card-header">
+                          <h3>LỘ TRÌNH HỌC TẬP AI</h3>
+                          <button className="link" onClick={() => setActiveTab('path')} style={{ background: 'none', border: 'none', font: 'inherit', color: 'var(--primary)', cursor: 'pointer', fontSize: '13px' }}>Xem đầy đủ →</button>
+                        </div>
+                        <div className="path-info-row" style={{ marginBottom: 16 }}>
+                          <div className="path-info">
+                            <p className="path-goal">Mục tiêu: <strong>Đạt 27+ điểm THPTQG</strong></p>
+                            <p className="path-combo">Khối: {currentUser?.combo || 'A01 (Toán – Lý – Anh)'}</p>
+                          </div>
+                        </div>
+                        <LearningPath />
                       </div>
-                      <p className="chatbot-question">Học viên Nguyễn Minh Anh, bạn cần EduBot hỗ trợ giải bài tập nào khó hôm nay? Nhấp để trao đổi!</p>
-                      <div className="chatbot-suggestions">
-                        <span className="chatbot-suggestion">Giải bài tập</span>
-                        <span className="chatbot-suggestion">Hỏi công thức</span>
+
+                      <div className="card recommendations animate-in">
+                        <div className="card-header">
+                          <h3>ĐỀ XUẤT HÔM NAY</h3>
+                          <span className="badge-pill" style={{ background: 'var(--primary-bg)', color: 'var(--primary)', fontWeight: 'bold' }}>✨ AI gợi ý</span>
+                        </div>
+                        <div className="rec-grid">
+                          <div className="rec-card" onClick={() => { const course = activeUserCourses.find(c => c.id === 1); if (course) setActiveCourseDetails(course); }}>
+                            <span className="rec-badge lesson">Bài học</span>
+                            <h4>Hàm số bậc 2 và đồ thị</h4>
+                            <p className="rec-subject">Toán học</p>
+                            <div className="rec-card-footer">
+                              <span className="rec-time">⏱ 45 phút</span>
+                              <button className="rec-play">▶</button>
+                            </div>
+                          </div>
+                          <div className="rec-card" onClick={() => setActiveTestSimulator("Bài tập củng cố Đạo hàm")}>
+                            <span className="rec-badge exercise">Luyện tập</span>
+                            <h4>Sửa sai Khảo sát hàm số</h4>
+                            <p className="rec-subject">Toán học</p>
+                            <div className="rec-card-footer">
+                              <span className="rec-time">⏱ 5 câu</span>
+                              <button className="rec-play">▶</button>
+                            </div>
+                          </div>
+                          <div className="rec-card" onClick={() => setActiveTab('ai-qa')}>
+                            <span className="rec-badge review">AI Tutor</span>
+                            <h4>Hỏi EduBot về Dao động cơ</h4>
+                            <p className="rec-subject">Vật lý</p>
+                            <div className="rec-card-footer">
+                              <span className="rec-time">⏱ Trực tuyến</span>
+                              <button className="rec-play">💬</button>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <div className="chatbot-robot">🤖</div>
+
+                      <ProgressChart />
+                    </div>
+
+                    {/* Right column */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                      <StreakCard />
+                      <PerformanceCard />
+                      <UpcomingTests />
+                      <div className="card chatbot-card animate-in" onClick={() => setActiveTab('ai-qa')} style={{ cursor: 'pointer' }}>
+                        <div className="chatbot-header">
+                          <h3>Trợ lý EduBot AI</h3>
+                          <span className="ai-badge">AI</span>
+                        </div>
+                        <p className="chatbot-question">{currentUser?.name}, hôm nay bạn muốn hỏi về kiến thức gì? Nhấp để bắt đầu!</p>
+                        <div className="chatbot-suggestions">
+                          <span className="chatbot-suggestion">Giải bài tập</span>
+                          <span className="chatbot-suggestion">Hỏi công thức</span>
+                        </div>
+                        <div className="chatbot-robot">🤖</div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -716,27 +768,8 @@ export default function App() {
         />
       )}
 
-      {/* ================= SAAS DEMO DEBUGGER / FAST LOGINS ================= */}
-      <div className="demo-controller" style={{ maxWidth: '340px' }}>
-        <div className="demo-controller-header">
-          <h4>SAAS LOGINS DEBUGGER (KĐ HỆ THỐNG)</h4>
-          <span style={{ fontSize: '9px', background: 'var(--primary)', color: '#fff', padding: '2px 6px', borderRadius: '8px', fontWeight: 'bold' }}>SWP391 PRO</span>
-        </div>
-        <p style={{ fontSize: '10.5px', color: 'var(--text-secondary)', marginBottom: '8px', lineHeight: '1.4' }}>
-          Nhấp đăng nhập nhanh bằng các tài khoản cấu hình sẵn để kiểm chứng quy trình hoặc đăng ký tài khoản mới thủ công.
-        </p>
-        <div className="demo-role-btns" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
-          <button className="demo-role-btn" onClick={() => handleQuickLogin('student')}>
-            1. Student MA
-          </button>
-          <button className="demo-role-btn" onClick={() => handleQuickLogin('teacher')}>
-            2. GV Thế Anh
-          </button>
-          <button className="demo-role-btn" onClick={() => handleQuickLogin('admin')}>
-            3. Admin 🛡️
-          </button>
-        </div>
-      </div>
+      {/* Demo quick-login panel (collapsible) */}
+      <DemoPanel onQuickLogin={handleQuickLogin} />
     </div>
   );
 }
