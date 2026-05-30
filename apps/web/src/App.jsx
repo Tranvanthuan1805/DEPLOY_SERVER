@@ -722,6 +722,10 @@ export default function App() {
                   onNavigateToAuth={(mode) => setActiveTab(mode)}
                   onBackToDashboard={handleBackToDashboard}
                   onLogout={handleLogout}
+                  forumPosts={forumPosts}
+                  onAddPost={handleForumAddPost}
+                  onLikePost={handleForumLikePost}
+                  onAddComment={handleForumAddComment}
                 />
               )}
             </div>
