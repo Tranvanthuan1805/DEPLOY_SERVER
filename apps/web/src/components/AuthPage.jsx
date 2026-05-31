@@ -1,9 +1,37 @@
 import { useState } from 'react';
 import { HiMail, HiLockClosed, HiUser, HiBookOpen, HiArrowLeft, HiEye, HiEyeOff, HiCheckCircle, HiExclamationCircle, HiX } from 'react-icons/hi';
 import { useGoogleLogin } from '@react-oauth/google';
+import { api } from '../api';
+
+function mapBackendUser(backendUser, password) {
+  const roleLower = (backendUser.role || 'STUDENT').toLowerCase();
+  const name = backendUser.fullName || backendUser.email.split('@')[0];
+  return {
+    id: backendUser.id,
+    name,
+    email: backendUser.email,
+    password: password || 'backend_managed',
+    role: roleLower,
+    combo: backendUser.subjectGroup || (roleLower === 'student' ? 'A01 (Toán – Lý – Anh)' : ''),
+    grade: roleLower === 'student' ? '12' : '',
+    avatar: backendUser.avatarUrl ? null : name.substring(0, 2).toUpperCase(),
+    avatarUrl: backendUser.avatarUrl || null,
+    isBanned: false,
+    status: 'active',
+    unlockedCourses: []
+  };
+}
+
+function saveAuthTokens(data) {
+  if (data.accessToken) localStorage.setItem('access_token', data.accessToken);
+  if (data.refreshToken) localStorage.setItem('refresh_token', data.refreshToken);
+}
 
 export default function AuthPage({ defaultMode = 'login', onAuthSuccess, usersList, addLog, onBackToLanding }) {
-  const [mode, setMode] = useState(defaultMode); // 'login', 'signup', 'forgot', 'reset_password'
+  const [mode, setMode] = useState(defaultMode); // 'login', 'signup', 'signup_otp', 'forgot', 'reset_password'
+  const [pendingSignupEmail, setPendingSignupEmail] = useState('');
+  const [pendingSignupOtp, setPendingSignupOtp] = useState('');
+  const [signupOtpInput, setSignupOtpInput] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -44,81 +72,99 @@ export default function AuthPage({ defaultMode = 'login', onAuthSuccess, usersLi
     setTypedOtp('');
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage('');
     setSuccessMessage('');
-    setLoading(true);
 
+    if (mode === 'login') {
+      setLoading(true);
+      // Admin demo bypass (keep for development)
+      if ((email.toLowerCase() === 'admin@edupath.vn' || email.toLowerCase() === 'tranvanthuan2005tt@gmail.com') && password === 'admin123') {
+        setLoading(false);
+        addLog('Quản trị viên đăng nhập thành công', 'sys');
+        onAuthSuccess({ name: email.toLowerCase() === 'tranvanthuan2005tt@gmail.com' ? 'Trần Văn Thuận' : 'Quản trị viên Hệ thống', email: email.toLowerCase(), role: 'admin', avatar: 'AD' });
+        return;
+      }
+      try {
+        const data = await api.login(email, password);
+        saveAuthTokens(data);
+        const mappedUser = mapBackendUser(data.user, password);
+        addLog(`"${mappedUser.name}" đăng nhập thành công — vai trò: ${mappedUser.role.toUpperCase()}`, 'sys');
+        onAuthSuccess(mappedUser);
+      } catch (err) {
+        setErrorMessage(err.message);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    if (mode === 'signup') {
+      if (!name.trim() || !email.trim() || !password.trim()) {
+        setErrorMessage('Vui lòng điền đầy đủ tất cả các trường bắt buộc.');
+        return;
+      }
+      if (password.length < 6) {
+        setErrorMessage('Mật khẩu phải có ít nhất 6 ký tự.');
+        return;
+      }
+      setLoading(true);
+      try {
+        const payload = {
+          email,
+          password,
+          fullName: name,
+          role: userRole === 'teacher' ? 'TEACHER' : 'STUDENT',
+          subjectGroup: userRole === 'student' ? (combo.split(' ')[0] || 'A01') : undefined,
+          phone
+        };
+        const data = await api.sendOtp(payload);
+        setPendingSignupEmail(email);
+        setPendingSignupOtp(data.otp); // dev mode: backend returns OTP
+        setGeneratedOtp(data.otp);
+        setMode('signup_otp');
+        setShowInbox(true);
+        addLog(`Đã gửi OTP đăng ký cho ${email}`, 'sys');
+      } catch (err) {
+        setErrorMessage(err.message);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    if (mode === 'signup_otp') {
+      if (!signupOtpInput || signupOtpInput.length !== 6) {
+        setErrorMessage('Vui lòng nhập đúng 6 chữ số OTP.');
+        return;
+      }
+      setLoading(true);
+      try {
+        const data = await api.verifyOtpRegister(pendingSignupEmail, signupOtpInput);
+        saveAuthTokens(data);
+        const mappedUser = mapBackendUser(data.user, password);
+        addLog(`Tài khoản mới: "${mappedUser.name}" (${mappedUser.email}) — đã lưu vào Supabase`, 'sys');
+        setShowInbox(false);
+        if (mappedUser.role === 'teacher') {
+          setSuccessMessage('Đăng ký Giáo viên thành công! Tài khoản đang chờ Admin duyệt.');
+          setMode('login');
+        } else {
+          onAuthSuccess(mappedUser);
+        }
+      } catch (err) {
+        setErrorMessage(err.message);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    setLoading(true);
     setTimeout(() => {
       setLoading(false);
 
-      if (mode === 'login') {
-        if ((email.toLowerCase() === 'admin@edupath.vn' || email.toLowerCase() === 'tranvanthuan2005tt@gmail.com') && password === 'admin123') {
-          addLog('Quản trị viên đăng nhập thành công', 'sys');
-          onAuthSuccess({ name: email.toLowerCase() === 'tranvanthuan2005tt@gmail.com' ? 'Trần Văn Thuận' : 'Quản trị viên Hệ thống', email: email.toLowerCase(), role: 'admin', avatar: 'AD' });
-          return;
-        }
-        const matched = usersList.find(u => u.email === email && u.password === password);
-        if (matched) {
-          if (matched.isBanned) {
-            setErrorMessage('Tài khoản của bạn đã bị khóa do vi phạm chính sách hệ thống.');
-            return;
-          }
-          if (matched.status === 'pending') {
-            setErrorMessage('Tài khoản Giáo viên đang chờ Admin phê duyệt. Vui lòng thử lại sau.');
-            return;
-          }
-          addLog(`"${matched.name}" đăng nhập thành công — vai trò: ${matched.role.toUpperCase()}`, 'sys');
-          onAuthSuccess(matched);
-        } else {
-          setErrorMessage('Email hoặc mật khẩu không chính xác. Vui lòng kiểm tra lại.');
-        }
-
-      } else if (mode === 'signup') {
-        if (!name.trim() || !email.trim() || !password.trim()) {
-          setErrorMessage('Vui lòng điền đầy đủ tất cả các trường bắt buộc.');
-          return;
-        }
-        if (password.length < 6) {
-          setErrorMessage('Mật khẩu phải có ít nhất 6 ký tự.');
-          return;
-        }
-        if (usersList.find(u => u.email === email) || email === 'admin@edupath.vn') {
-          setErrorMessage('Email này đã được đăng ký bởi tài khoản khác.');
-          return;
-        }
-
-        const newUser = {
-          id: Date.now(),
-          name,
-          email,
-          password,
-          role: userRole,
-          combo: userRole === 'student' ? combo : '',
-          grade: userRole === 'student' ? '12' : '',
-          avatar: name.substring(0, 2).toUpperCase(),
-          isBanned: false,
-          status: userRole === 'teacher' ? 'pending' : 'active',
-          unlockedCourses: [],
-        };
-
-        addLog(`Tài khoản mới: "${name}" (${email}) — Vai trò: ${userRole.toUpperCase()}`, 'sys');
-        onAuthSuccess(null, newUser);
-
-        if (userRole === 'teacher') {
-          setSuccessMessage('Đăng ký Giáo viên thành công! Hồ sơ của bạn đang chờ Admin phê duyệt.');
-          setEmail(email);
-          setPassword('');
-          setMode('login');
-        } else {
-          setSuccessMessage('Đăng ký thành công! Hãy đăng nhập để bắt đầu học.');
-          setEmail(email);
-          setPassword('');
-          setMode('login');
-        }
-
-      } else if (mode === 'forgot') {
+      if (mode === 'forgot') {
         if (!resetEmail.trim()) return;
         
         // Generate random 6-digit OTP
@@ -277,40 +323,27 @@ export default function AuthPage({ defaultMode = 'login', onAuthSuccess, usersLi
       try {
         const userInfoRes = await fetch(`https://www.googleapis.com/oauth2/v3/userinfo?access_token=${tokenResponse.access_token}`);
         const googleProfile = await userInfoRes.json();
-        
-        if (googleProfile && googleProfile.email) {
-          const matched = usersList.find(u => u.email === googleProfile.email);
-          if (matched) {
-            if (matched.isBanned) {
-              setErrorMessage('Tài khoản của bạn đã bị khóa do vi phạm chính sách hệ thống.');
-              return;
-            }
-            addLog(`"${matched.name}" đăng nhập thành công qua Google OAuth`, 'sys');
-            onAuthSuccess(matched);
-          } else {
-            const newGoogleUser = {
-              id: Date.now(),
-              name: googleProfile.name || 'Người dùng Google',
-              email: googleProfile.email,
-              password: 'google_oauth_no_password_2026',
-              role: 'student',
-              combo: 'A01 (Toán – Lý – Anh)',
-              grade: '12',
-              avatar: googleProfile.picture ? googleProfile.email.substring(0, 2).toUpperCase() : 'GG',
-              isBanned: false,
-              status: 'active',
-              unlockedCourses: [1],
-            };
-            onAuthSuccess(null, newGoogleUser);
-            addLog(`Tài khoản mới đăng ký tự động qua Google: "${newGoogleUser.name}" (${newGoogleUser.email})`, 'sys');
-            onAuthSuccess(newGoogleUser);
-          }
-        } else {
+
+        if (!googleProfile || !googleProfile.email) {
           setErrorMessage('Không thể truy cập hồ sơ Google của bạn.');
+          return;
         }
+
+        const data = await api.googleAuth({
+          email: googleProfile.email,
+          fullName: googleProfile.name || googleProfile.email.split('@')[0],
+          googleId: googleProfile.sub,
+          avatarUrl: googleProfile.picture || null,
+          role: 'STUDENT',
+          subjectGroup: 'A01'
+        });
+        saveAuthTokens(data);
+        const mappedUser = mapBackendUser(data.user, 'google_oauth');
+        addLog(`"${mappedUser.name}" đăng nhập qua Google → lưu vào Supabase`, 'sys');
+        onAuthSuccess(mappedUser);
       } catch (err) {
         console.error(err);
-        setErrorMessage('Đăng nhập Google thất bại do lỗi kết nối mạng.');
+        setErrorMessage(err.message || 'Đăng nhập Google thất bại.');
       } finally {
         setLoading(false);
       }
@@ -360,17 +393,17 @@ export default function AuthPage({ defaultMode = 'login', onAuthSuccess, usersLi
             </div>
             
             <div className="auth-header-toggle-side">
-              {mode !== 'forgot' && mode !== 'reset_password' ? (
+              {mode === 'login' || mode === 'signup' ? (
                 <>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     className={`auth-header-toggle-btn${mode === 'login' ? ' active' : ''}`}
                     onClick={() => switchMode('login')}
                   >
                     ĐĂNG NHẬP
                   </button>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     className={`auth-header-toggle-btn${mode === 'signup' ? ' active' : ''}`}
                     onClick={() => switchMode('signup')}
                   >
@@ -378,12 +411,14 @@ export default function AuthPage({ defaultMode = 'login', onAuthSuccess, usersLi
                   </button>
                 </>
               ) : (
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   className="auth-header-toggle-btn active"
                   style={{ textTransform: 'uppercase' }}
                 >
-                  {mode === 'forgot' ? 'QUÊN MẬT KHẨU' : 'OTP XÁC THỰC'}
+                  {mode === 'forgot' && 'QUÊN MẬT KHẨU'}
+                  {mode === 'reset_password' && 'OTP XÁC THỰC'}
+                  {mode === 'signup_otp' && 'XÁC THỰC OTP ĐĂNG KÝ'}
                 </button>
               )}
             </div>
@@ -402,12 +437,14 @@ export default function AuthPage({ defaultMode = 'login', onAuthSuccess, usersLi
               <h2>
                 {mode === 'login' && 'Chào mừng trở lại 👋'}
                 {mode === 'signup' && 'Tạo tài khoản mới ✨'}
+                {mode === 'signup_otp' && 'Xác thực OTP 📧'}
                 {mode === 'forgot' && 'Khôi phục mật khẩu 🔑'}
                 {mode === 'reset_password' && 'Đặt lại mật khẩu mới 🛡️'}
               </h2>
               <p>
                 {mode === 'login' && 'Đăng nhập để tiếp tục lộ trình học tập của bạn.'}
                 {mode === 'signup' && 'Đăng ký miễn phí và bắt đầu học tập tại EduPath ngay hôm nay.'}
+                {mode === 'signup_otp' && `Mã OTP đã được gửi tới ${pendingSignupEmail}. Hãy kiểm tra hộp thư bên dưới.`}
                 {mode === 'forgot' && 'Nhập email đã đăng ký. Chúng tôi sẽ gửi mã OTP xác nhận ngay.'}
                 {mode === 'reset_password' && 'Mã OTP đã được gửi đến email của bạn. Hãy đổi mật khẩu.'}
               </p>
@@ -425,6 +462,33 @@ export default function AuthPage({ defaultMode = 'login', onAuthSuccess, usersLi
                 <HiCheckCircle className="auth-alert-icon" />
                 {successMessage}
               </div>
+            )}
+
+            {/* SIGNUP OTP VERIFICATION FORM */}
+            {mode === 'signup_otp' && (
+              <form onSubmit={handleSubmit} className="auth-premium-form">
+                <p className="auth-form-sub-text">Nhập mã OTP 6 chữ số đã gửi tới <strong>{pendingSignupEmail}</strong></p>
+                <div className="auth-input-group">
+                  <label>MÃ XÁC THỰC OTP</label>
+                  <div className="auth-input-wrap">
+                    <HiLockClosed className="auth-input-icon" />
+                    <input
+                      type="text"
+                      maxLength={6}
+                      placeholder="Nhập 6 chữ số"
+                      value={signupOtpInput}
+                      onChange={e => setSignupOtpInput(e.target.value.replace(/\D/g, ''))}
+                      required
+                    />
+                  </div>
+                </div>
+                <button type="submit" className="auth-submit-btn-premium" disabled={loading}>
+                  {loading ? 'ĐANG XÁC THỰC...' : 'XÁC NHẬN & TẠO TÀI KHOẢN →'}
+                </button>
+                <button type="button" className="auth-link-btn-flat" onClick={() => { setMode('signup'); setSignupOtpInput(''); setShowInbox(false); }}>
+                  <HiArrowLeft /> Quay lại form đăng ký
+                </button>
+              </form>
             )}
 
             {/* Forms rendering */}
@@ -790,13 +854,13 @@ export default function AuthPage({ defaultMode = 'login', onAuthSuccess, usersLi
         </div>
       )}
 
-      {/* ── MOCK INBOX DRAWER FOR FORGOT PASSWORD ── */}
-      {showInbox && resetSuccess && (
+      {/* ── MOCK INBOX DRAWER FOR OTP (signup + forgot password) ── */}
+      {showInbox && (resetSuccess || mode === 'signup_otp') && (
         <div className="mock-inbox-overlay">
           <div className="mock-inbox-header">
             <span style={{ fontSize: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 6 }}>📬 Hộp Thư Thử Nghiệm (Mock Inbox)</span>
-            <button 
-              onClick={() => setShowInbox(false)} 
+            <button
+              onClick={() => setShowInbox(false)}
               style={{ background: 'none', border: 'none', color: '#fff', fontSize: '18px', cursor: 'pointer' }}
             >
               ✕
@@ -809,29 +873,42 @@ export default function AuthPage({ defaultMode = 'login', onAuthSuccess, usersLi
                 <span>Vừa xong</span>
               </div>
               <h4 style={{ fontSize: '12.5px', fontWeight: 'bold', color: 'var(--text-primary)', margin: '0 0 6px 0' }}>
-                Mã xác thực khôi phục mật khẩu tài khoản EduPath
+                {mode === 'signup_otp' ? 'Mã OTP xác thực tài khoản đăng ký mới' : 'Mã xác thực khôi phục mật khẩu tài khoản EduPath'}
               </h4>
               <p style={{ fontSize: '11.5px', color: 'var(--text-secondary)', lineHeight: 1.4, margin: '0 0 10px 0' }}>
-                Xin chào, mã xác thực OTP dùng để khôi phục mật khẩu tài khoản liên kết với email <strong>{resetEmail}</strong> là:
+                {mode === 'signup_otp' ? (
+                  <>Xin chào, mã OTP để hoàn tất đăng ký tài khoản <strong>{pendingSignupEmail}</strong> là:</>
+                ) : (
+                  <>Xin chào, mã xác thực OTP dùng để khôi phục mật khẩu tài khoản liên kết với email <strong>{resetEmail}</strong> là:</>
+                )}
               </p>
               <div style={{ background: 'var(--bg-main)', padding: '12px', borderRadius: '8px', textAlign: 'center', border: '1px dashed var(--primary)', margin: '10px 0 14px 0' }}>
                 <span style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--text-secondary)', display: 'block', marginBottom: '2px', fontWeight: 'bold' }}>MÃ OTP XÁC THỰC CỦA BẠN:</span>
-                <strong style={{ fontSize: '24px', color: 'var(--primary)', letterSpacing: '4px' }}>{generatedOtp}</strong>
+                <strong style={{ fontSize: '24px', color: 'var(--primary)', letterSpacing: '4px' }}>
+                  {mode === 'signup_otp' ? pendingSignupOtp : generatedOtp}
+                </strong>
               </div>
-              <button 
-                className="btn-primary" 
-                style={{ padding: '8px 16px', fontSize: '11px', width: '100%', borderRadius: 'var(--radius-sm)' }}
-                onClick={() => {
-                  setMode('reset_password');
-                  setShowInbox(false);
-                  setSuccessMessage('');
-                  setErrorMessage('');
-                  setPassword('');
-                  setConfirmPassword('');
-                }}
-              >
-                🔑 Bấm Vào Đây Để Nhập OTP & Đổi Mật Khẩu
-              </button>
+              {mode !== 'signup_otp' && (
+                <button
+                  className="btn-primary"
+                  style={{ padding: '8px 16px', fontSize: '11px', width: '100%', borderRadius: 'var(--radius-sm)' }}
+                  onClick={() => {
+                    setMode('reset_password');
+                    setShowInbox(false);
+                    setSuccessMessage('');
+                    setErrorMessage('');
+                    setPassword('');
+                    setConfirmPassword('');
+                  }}
+                >
+                  🔑 Bấm Vào Đây Để Nhập OTP & Đổi Mật Khẩu
+                </button>
+              )}
+              {mode === 'signup_otp' && (
+                <p style={{ fontSize: '11px', color: 'var(--text-muted)', textAlign: 'center', margin: '6px 0 0 0' }}>
+                  Nhập mã trên vào form bên trái để hoàn tất đăng ký.
+                </p>
+              )}
             </div>
           </div>
         </div>
