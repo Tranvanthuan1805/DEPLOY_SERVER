@@ -370,10 +370,10 @@ export default function LandingPage({
 
           <div className="lp-nav__links">
             <a href="#subjects" className={activeLandingView === 'subjects' ? 'lp-link--active' : ''} onClick={(e) => { e.preventDefault(); setActiveLandingView('subjects'); }}>Môn học</a>
-            <a href="#features" className={activeLandingView === 'features' ? 'lp-link--active' : ''} onClick={(e) => { e.preventDefault(); setActiveLandingView('features'); }}>Tính năng</a>
-            <a href="#forum" className={activeLandingView === 'forum' ? 'lp-link--active' : ''} onClick={(e) => { e.preventDefault(); setActiveLandingView('forum'); }}>Diễn đàn</a>
-            <a href="#stats" className={activeLandingView === 'about' ? 'lp-link--active' : ''} onClick={(e) => { e.preventDefault(); setActiveLandingView('about'); }}>Về chúng tôi</a>
+            <a href="#leaderboard" onClick={(e) => scrollToSection(e, 'leaderboard')}>Thi thử THPTQG</a>
+            <a href="#features" className={activeLandingView === 'features' ? 'lp-link--active' : ''} onClick={(e) => { e.preventDefault(); setActiveLandingView('features'); }}>Tính năng AI</a>
             <a href="#pricing" className={activeLandingView === 'pricing' ? 'lp-link--active' : ''} onClick={(e) => { e.preventDefault(); setActiveLandingView('pricing'); }}>Học phí</a>
+            <a href="#forum" className={activeLandingView === 'forum' ? 'lp-link--active' : ''} onClick={(e) => { e.preventDefault(); setActiveLandingView('forum'); }}>Diễn đàn</a>
           </div>
 
           <div className="lp-nav__cta">
@@ -591,10 +591,10 @@ export default function LandingPage({
         {mobileMenuOpen && (
           <div className="lp-mobile-menu">
             <a href="#subjects" onClick={(e) => { e.preventDefault(); setActiveLandingView('subjects'); setMobileMenuOpen(false); }}>Môn học</a>
-            <a href="#features" onClick={(e) => { e.preventDefault(); setActiveLandingView('features'); setMobileMenuOpen(false); }}>Tính năng</a>
-            <a href="#forum" onClick={(e) => { e.preventDefault(); setActiveLandingView('forum'); setMobileMenuOpen(false); }}>Diễn đàn</a>
-            <a href="#stats" onClick={(e) => { e.preventDefault(); setActiveLandingView('about'); setMobileMenuOpen(false); }}>Về chúng tôi</a>
+            <a href="#leaderboard" onClick={(e) => { scrollToSection(e, 'leaderboard'); setMobileMenuOpen(false); }}>Thi thử THPTQG</a>
+            <a href="#features" onClick={(e) => { e.preventDefault(); setActiveLandingView('features'); setMobileMenuOpen(false); }}>Tính năng AI</a>
             <a href="#pricing" onClick={(e) => { e.preventDefault(); setActiveLandingView('pricing'); setMobileMenuOpen(false); }}>Học phí</a>
+            <a href="#forum" onClick={(e) => { e.preventDefault(); setActiveLandingView('forum'); setMobileMenuOpen(false); }}>Diễn đàn</a>
             
             {currentUser ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
