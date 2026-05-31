@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 import { initSocket } from './lib/socket.js';
 
 // Controller imports
-import { register, login, logout } from './controllers/auth.js';
+import { register, login, logout, sendOtp, verifyOtpRegister, googleAuth } from './controllers/auth.js';
 import { getCourses, getCourseById, createCourse, getCourseStats } from './controllers/course.js';
 import { getExams, startAttempt, submitAttempt } from './controllers/exam.js';
 import { streamAIChat, refreshRoadmap, generateAIQuestions } from './controllers/ai.js';
@@ -34,6 +34,9 @@ app.use((req, res, next) => {
 app.post('/register', register);
 app.post('/login', login);
 app.post('/logout', logout);
+app.post('/auth/send-otp', sendOtp);
+app.post('/auth/verify-otp-register', verifyOtpRegister);
+app.post('/auth/google', googleAuth);
 
 // Protected Course Routes
 app.get('/courses', getCourses);
