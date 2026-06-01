@@ -25,6 +25,14 @@ initSocket(server);
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 
+// Strip /api prefix for Vercel routing
+app.use((req, res, next) => {
+  if (req.url.startsWith('/api')) {
+    req.url = req.url.substring(4);
+  }
+  next();
+});
+
 // Logging Middleware
 app.use((req, res, next) => {
   console.log(`[API] ${req.method} ${req.path}`);
