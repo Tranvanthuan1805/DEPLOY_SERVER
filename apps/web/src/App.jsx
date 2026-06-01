@@ -26,41 +26,6 @@ import ChatbotWidget from './components/ChatbotWidget.jsx';
 
 import { HiPlay, HiDocumentDownload, HiBeaker, HiX } from 'react-icons/hi';
 
-function DemoPanel({ onQuickLogin }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div style={{ position: 'fixed', bottom: 20, right: 20, zIndex: 9999 }}>
-      {open && (
-        <div className="demo-controller animate-in" style={{ marginBottom: 8 }}>
-          <div className="demo-controller-header">
-            <h4>Demo — Đăng nhập nhanh</h4>
-            <button onClick={() => setOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}>✕</button>
-          </div>
-          <div className="demo-role-btns" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
-            <button className="demo-role-btn" onClick={() => { onQuickLogin('student'); setOpen(false); }}>🎒 Học sinh</button>
-            <button className="demo-role-btn" onClick={() => { onQuickLogin('teacher'); setOpen(false); }}>🎓 Giáo viên</button>
-            <button className="demo-role-btn" onClick={() => { onQuickLogin('admin'); setOpen(false); }}>🛡️ Admin</button>
-          </div>
-        </div>
-      )}
-      <button
-        onClick={() => setOpen(!open)}
-        style={{
-          width: 44, height: 44, borderRadius: '50%',
-          background: 'var(--primary)', color: '#fff',
-          border: 'none', cursor: 'pointer', fontSize: 18,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: '0 4px 14px rgba(108,92,231,0.5)',
-          transition: 'all 0.2s',
-        }}
-        title="Demo login"
-      >
-        {open ? '✕' : '⚡'}
-      </button>
-    </div>
-  );
-}
-
 // Initial Database preloads
 const initialCourses = [
   {
@@ -763,25 +728,6 @@ export default function App() {
       read: false
     };
     setNotifications(prev => [newNotif, ...prev]);
-  };
-
-  // Fast demo logins for easier auditing
-  const handleQuickLogin = (targetRole) => {
-    if (targetRole === 'student') {
-      const student = usersList.find(u => u.email === 'student@gmail.com');
-      if (student) handleAuthSuccess(student);
-    } else if (targetRole === 'teacher') {
-      const teacher = usersList.find(u => u.email === 'teacher@gmail.com');
-      if (teacher) handleAuthSuccess(teacher);
-    } else if (targetRole === 'admin') {
-      const admin = {
-        name: 'Quản trị viên Hệ thống',
-        email: 'admin@edupath.vn',
-        role: 'admin',
-        avatar: 'AD'
-      };
-      handleAuthSuccess(admin);
-    }
   };
 
   // Filter dynamic list of course purchases for current user session
@@ -1511,8 +1457,7 @@ export default function App() {
       {/* Public Chatbot AI floating button and chat dialog */}
       <ChatbotWidget />
 
-      {/* Demo quick-login panel (collapsible) */}
-      {/* <DemoPanel onQuickLogin={handleQuickLogin} /> */}
+
     </div>
   );
 }
