@@ -9,6 +9,7 @@ function mapBackendUser(backendUser, password) {
   return {
     id: backendUser.id,
     name,
+    fullName: name,
     email: backendUser.email,
     password: password || 'backend_managed',
     role: roleLower,
@@ -18,7 +19,9 @@ function mapBackendUser(backendUser, password) {
     avatarUrl: backendUser.avatarUrl || null,
     isBanned: false,
     status: 'active',
-    unlockedCourses: []
+    // Preserve enrollments from DB (array of {courseId, paidAt, id})
+    enrollments: backendUser.enrollments || [],
+    unlockedCourses: (backendUser.enrollments || []).map(e => e.courseId)
   };
 }
 
@@ -89,8 +92,9 @@ export default function AuthPage({ defaultMode = 'login', onAuthSuccess, usersLi
       try {
         const data = await api.login(email, password);
         saveAuthTokens(data);
+        // Pass full user object WITH enrollments to App.jsx handleAuthSuccess
         const mappedUser = mapBackendUser(data.user, password);
-        addLog(`"${mappedUser.name}" đăng nhập thành công — vai trò: ${mappedUser.role.toUpperCase()}`, 'sys');
+        addLog(`"${mappedUser.name}" đăng nhập thành công — vai trò: ${mappedUser.role.toUpperCase()} (${mappedUser.enrollments.length} khóa học đã mua)`, 'sys');
         onAuthSuccess(mappedUser);
       } catch (err) {
         setErrorMessage(err.message);

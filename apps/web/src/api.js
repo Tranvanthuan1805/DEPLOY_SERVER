@@ -42,5 +42,27 @@ export const api = {
     request('/chatbot', { method: 'POST', body: { message, history } }),
 
   changePassword: (oldPassword, newPassword) =>
-    request('/auth/change-password', { method: 'POST', body: { oldPassword, newPassword } })
+    request('/auth/change-password', { method: 'POST', body: { oldPassword, newPassword } }),
+
+  // ── Courses ──
+  getCourses: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/courses${qs ? '?' + qs : ''}`);
+  },
+
+  getCourseById: (id) =>
+    request(`/courses/${id}`),
+
+  // ── Enrollments ──
+  checkEnrollment: (courseId) =>
+    request(`/enrollments/status?courseId=${courseId}`),
+
+  // Demo enrollment — saves real enrollment to DB without payment
+  demoEnroll: (courseId) =>
+    request('/enrollments/demo', { method: 'POST', body: { courseId } }),
+
+  // ── Profile ──
+  // Update user fullName, avatarUrl, subjectGroup in DB
+  updateProfile: (payload) =>
+    request('/auth/profile', { method: 'PATCH', body: payload }),
 };

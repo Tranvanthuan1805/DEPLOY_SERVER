@@ -85,7 +85,13 @@ export async function login(req: Request, res: Response) {
     const user = await prisma.user.findUnique({
       where: { email },
       include: {
-        student: true,
+        student: {
+          include: {
+            enrollments: {
+              select: { courseId: true, paidAt: true, id: true }
+            }
+          }
+        },
         teacher: true
       }
     });
@@ -125,13 +131,73 @@ export async function login(req: Request, res: Response) {
           id: user.id,
           email: user.email,
           fullName: user.fullName,
+          avatarUrl: user.avatarUrl,
           role: user.role,
           isPro: user.isPro,
-          subjectGroup: user.student?.subjectGroup || null
+          subjectGroup: user.student?.subjectGroup || null,
+          enrollments: user.student?.enrollments || []
         }
       }
     });
   } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+// Update user profile (PATCH /auth/profile)
+export async function updateProfile(req: Request, res: Response) {
+  const userId = (req as any).user?.id;
+
+  if (!userId) {
+    return res.status(401).json({ success: false, error: 'Chưa xác thực!' });
+  }
+
+  const { fullName, avatarUrl, subjectGroup, phone, city, school, targetScore, targetUniversity, combo } = req.body;
+
+  try {
+    // Update base user info
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(fullName ? { fullName } : {}),
+        ...(avatarUrl !== undefined ? { avatarUrl } : {}),
+      },
+      include: {
+        student: {
+          include: {
+            enrollments: {
+              select: { courseId: true, paidAt: true, id: true }
+            }
+          }
+        }
+      }
+    });
+
+    // Update student subjectGroup if provided (stored as extra fields in Student table)
+    if (updatedUser.student && subjectGroup) {
+      await prisma.student.update({
+        where: { userId },
+        data: { subjectGroup }
+      });
+    }
+
+    console.log(`[Profile Update] Cập nhật hồ sơ thành công cho người dùng ID: ${userId}`);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        fullName: updatedUser.fullName,
+        avatarUrl: updatedUser.avatarUrl,
+        role: updatedUser.role,
+        isPro: updatedUser.isPro,
+        subjectGroup: subjectGroup || updatedUser.student?.subjectGroup || null,
+        enrollments: updatedUser.student?.enrollments || []
+      }
+    });
+  } catch (err: any) {
+    console.error('[Profile Update Error]', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 }

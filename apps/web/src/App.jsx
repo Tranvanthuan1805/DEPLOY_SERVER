@@ -376,7 +376,9 @@ export default function App() {
     }
     return list;
   });
-  const [courses, setCourses] = useState(() => JSON.parse(localStorage.getItem('app_courses')) || initialCourses);
+  const [courses, setCourses] = useState(initialCourses);
+  const [coursesLoading, setCoursesLoading] = useState(false);
+  const [coursesError, setCoursesError] = useState(null);
   const [questionBank, setQuestionBank] = useState(() => JSON.parse(localStorage.getItem('app_questions')) || initialQuestions);
   const [submissions, setSubmissions] = useState(() => JSON.parse(localStorage.getItem('app_submissions')) || []);
   const [notifications, setNotifications] = useState(() => JSON.parse(localStorage.getItem('app_notifications')) || [
@@ -449,20 +451,46 @@ export default function App() {
     }
   }, [currentUser, activeTab]);
 
+  // Fetch courses từ API (Supabase PostgreSQL)
+  useEffect(() => {
+    const fetchCourses = async () => {
+      setCoursesLoading(true);
+      setCoursesError(null);
+      try {
+        const data = await api.getCourses();
+        if (data && data.length > 0) {
+          // Map API fields sang format của app
+          const mapped = data.map(c => ({
+            ...c,
+            teacherName: c.teacher?.user?.fullName || 'Giáo viên EduPath',
+            lessons: c.lessons || []
+          }));
+          setCourses(mapped);
+        }
+      } catch (err) {
+        console.warn('[CourseMall] Không thể tải khóa học từ API, dùng dữ liệu mẫu:', err.message);
+        setCoursesError(err.message);
+        // Giữ initialCourses làm fallback
+      } finally {
+        setCoursesLoading(false);
+      }
+    };
+    fetchCourses();
+  }, []);
+
   // Sync state data to localStorage
   useEffect(() => {
     localStorage.setItem('current_user', JSON.stringify(currentUser));
     localStorage.setItem('user_role', role);
     localStorage.setItem('app_theme', theme);
     localStorage.setItem('users_list', JSON.stringify(usersList));
-    localStorage.setItem('app_courses', JSON.stringify(courses));
     localStorage.setItem('app_questions', JSON.stringify(questionBank));
     localStorage.setItem('app_submissions', JSON.stringify(submissions));
     localStorage.setItem('app_notifications', JSON.stringify(notifications));
     localStorage.setItem('app_logs', JSON.stringify(systemLogs));
     localStorage.setItem('app_approvals', JSON.stringify(courseApprovals));
     localStorage.setItem('app_forum_posts', JSON.stringify(forumPosts));
-  }, [currentUser, role, theme, usersList, courses, questionBank, submissions, notifications, systemLogs, courseApprovals, forumPosts]);
+  }, [currentUser, role, theme, usersList, questionBank, submissions, notifications, systemLogs, courseApprovals, forumPosts]);
 
   // Dark theme trigger
   useEffect(() => {
@@ -499,9 +527,22 @@ export default function App() {
       return;
     }
 
-    setCurrentUser(user);
-    setRole(user.role);
+    // Map API user fields → app's internal format, preserving enrollments from DB
+    const mappedUser = {
+      ...user,
+      name: user.fullName || user.name || '',
+      avatar: user.avatarUrl || user.avatar || (user.fullName ? user.fullName.slice(0, 2).toUpperCase() : 'U'),
+      combo: user.subjectGroup || user.combo || 'A01 (Toán – Lý – Anh)',
+      // enrollments from DB: [{courseId, paidAt, id}]
+      enrollments: user.enrollments || [],
+      // unlockedCourses: derived from enrollments for backward compat
+      unlockedCourses: (user.enrollments || []).map(e => e.courseId)
+    };
+
+    setCurrentUser(mappedUser);
+    setRole((user.role || 'student').toLowerCase());
     setActiveTab('landing');
+    addLog(`Đăng nhập thành công: ${mappedUser.name} (${mappedUser.enrollments?.length || 0} khóa học đã mua)`, 'sys');
   };
 
   const handleBackToDashboard = (targetTab) => {
@@ -538,11 +579,24 @@ export default function App() {
     }
   };
 
-  const handleSaveProfile = (updatedProfile) => {
+  const handleSaveProfile = async (updatedProfile) => {
     setCurrentUser(updatedProfile);
     const updatedList = usersList.map(u => u.email === updatedProfile.email ? updatedProfile : u);
     setUsersList(updatedList);
-    addLog(`Người dùng "${updatedProfile.name}" cập nhật thông tin cá nhân thành công`, 'sys');
+
+    // Persist to DB: update fullName, avatarUrl, subjectGroup
+    try {
+      await api.updateProfile({
+        fullName: updatedProfile.name || updatedProfile.fullName,
+        avatarUrl: (updatedProfile.avatar && updatedProfile.avatar.startsWith('data:image/')) ? updatedProfile.avatar : undefined,
+        subjectGroup: updatedProfile.subjectGroup || (updatedProfile.combo || '').split(' ')[0] || 'A01'
+      });
+      addLog(`[DB] Đã lưu hồ sơ "${updatedProfile.name}" vào database thành công.`, 'sys');
+    } catch (err) {
+      console.warn('[Profile Update] Không thể lưu vào DB:', err.message);
+      addLog(`[DB Warning] Lưu hồ sơ thất bại: ${err.message}`, 'sys');
+    }
+
     alert('Lưu thông tin cá nhân thành công!');
   };
 
@@ -579,26 +633,44 @@ export default function App() {
     }
   };
 
-  // Student purchases course
-  const handlePaymentSuccess = (courseId) => {
-    // Add to student's list in users database
+  // Student purchases course (Demo mode — also persists to DB)
+  const handlePaymentSuccess = async (courseId) => {
+    // Create a fake enrollment record matching the structure CourseMall expects
+    const newEnrollment = { courseId: courseId, paidAt: new Date().toISOString() };
+
+    // Optimistically update UI first
     const updatedUsers = usersList.map(u => {
       if (u.email === currentUser.email) {
         const unlocked = u.unlockedCourses || [];
-        return { ...u, unlockedCourses: [...unlocked, courseId] };
+        const enrollments = u.enrollments || [];
+        return {
+          ...u,
+          unlockedCourses: [...unlocked, courseId],
+          enrollments: [...enrollments, newEnrollment]
+        };
       }
       return u;
     });
     setUsersList(updatedUsers);
 
-    // Sync active session unlockedCourses
     const activeUnlocked = currentUser.unlockedCourses || [];
+    const activeEnrollments = currentUser.enrollments || [];
     setCurrentUser({
       ...currentUser,
-      unlockedCourses: [...activeUnlocked, courseId]
+      unlockedCourses: [...activeUnlocked, courseId],
+      enrollments: [...activeEnrollments, newEnrollment]
     });
 
     setCheckoutCourse(null);
+
+    // Persist to PostgreSQL DB in background
+    try {
+      await api.demoEnroll(courseId);
+      addLog(`[DB] Đã lưu enrollment khóa học ID=${courseId} vào database thành công.`, 'sys');
+    } catch (err) {
+      console.warn('[Demo Enrollment] Không thể lưu vào DB (sẽ dùng local state):', err.message);
+      addLog(`[DB Warning] Lưu enrollment thất bại: ${err.message}`, 'sys');
+    }
   };
 
   // Student upgrades to PRO membership success
@@ -941,7 +1013,12 @@ export default function App() {
               {activeTab === 'courses' && (
                 <CourseMall
                   courses={courses}
-                  currentUser={currentUser}
+                  coursesLoading={coursesLoading}
+                  coursesError={coursesError}
+                  currentUser={{
+                    ...currentUser,
+                    enrollments: currentUser?.enrollments || []
+                  }}
                   onSelectCourse={setActiveCourseDetails}
                   onCheckoutCourse={setCheckoutCourse}
                 />

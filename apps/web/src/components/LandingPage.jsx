@@ -369,10 +369,9 @@ export default function LandingPage({
           </div>
 
           <div className="lp-nav__links">
-            <a href="#subjects" className={activeLandingView === 'subjects' ? 'lp-link--active' : ''} onClick={(e) => { e.preventDefault(); setActiveLandingView('subjects'); }}>Môn học</a>
+            <a href="#subjects" className={activeLandingView === 'subjects' ? 'lp-link--active' : ''} onClick={(e) => { e.preventDefault(); setActiveLandingView('subjects'); }}>Khóa học</a>
             <a href="#leaderboard" onClick={(e) => scrollToSection(e, 'leaderboard')}>Thi thử THPTQG</a>
             <a href="#features" className={activeLandingView === 'features' ? 'lp-link--active' : ''} onClick={(e) => { e.preventDefault(); setActiveLandingView('features'); }}>Tính năng AI</a>
-            <a href="#pricing" className={activeLandingView === 'pricing' ? 'lp-link--active' : ''} onClick={(e) => { e.preventDefault(); setActiveLandingView('pricing'); }}>Học phí</a>
             <a href="#forum" className={activeLandingView === 'forum' ? 'lp-link--active' : ''} onClick={(e) => { e.preventDefault(); setActiveLandingView('forum'); }}>Diễn đàn</a>
           </div>
 
@@ -608,10 +607,9 @@ export default function LandingPage({
 
         {mobileMenuOpen && (
           <div className="lp-mobile-menu">
-            <a href="#subjects" onClick={(e) => { e.preventDefault(); setActiveLandingView('subjects'); setMobileMenuOpen(false); }}>Môn học</a>
+            <a href="#subjects" onClick={(e) => { e.preventDefault(); setActiveLandingView('subjects'); setMobileMenuOpen(false); }}>Khóa học</a>
             <a href="#leaderboard" onClick={(e) => { scrollToSection(e, 'leaderboard'); setMobileMenuOpen(false); }}>Thi thử THPTQG</a>
             <a href="#features" onClick={(e) => { e.preventDefault(); setActiveLandingView('features'); setMobileMenuOpen(false); }}>Tính năng AI</a>
-            <a href="#pricing" onClick={(e) => { e.preventDefault(); setActiveLandingView('pricing'); setMobileMenuOpen(false); }}>Học phí</a>
             <a href="#forum" onClick={(e) => { e.preventDefault(); setActiveLandingView('forum'); setMobileMenuOpen(false); }}>Diễn đàn</a>
             
             {currentUser ? (
@@ -1005,52 +1003,7 @@ export default function LandingPage({
         </div>
       </section>
 
-      {/* ── PRICING ── */}
-      <section id="pricing" className="lp-pricing-section">
-        <div className="lp-container">
-          <div className="lp-section-header">
-            <span className="lp-eyebrow lp-eyebrow--outline">Học phí minh bạch</span>
-            <h2>Bắt đầu miễn phí, nâng cấp khi sẵn sàng</h2>
-          </div>
 
-          <div className="lp-pricing-row">
-            <div className="lp-price-card">
-              <div className="lp-price-tier">GÓI CƠ BẢN</div>
-              <div className="lp-price-amount">0đ<span>/mãi mãi</span></div>
-              <ul className="lp-price-features">
-                <li><HiCheck /> Làm 5 đề thi thử mẫu</li>
-                <li><HiCheck /> Xem 2 bài giảng đầu mỗi khóa</li>
-                <li><HiCheck /> Tải slide tóm tắt công thức</li>
-              </ul>
-              <button 
-                className="lp-btn lp-btn--outline lp-btn--full" 
-                onClick={() => currentUser ? onBackToDashboard('home') : onNavigateToAuth('signup')}
-              >
-                {currentUser ? "Bắt đầu học ngay" : "Đăng ký miễn phí"}
-              </button>
-            </div>
-
-            <div className="lp-price-card lp-price-card--featured">
-              <div className="lp-price-badge">Bán chạy nhất ⚡</div>
-              <div className="lp-price-tier">PREMIUM PRO</div>
-              <div className="lp-price-amount">599.000đ<span>/trọn đời</span></div>
-              <ul className="lp-price-features">
-                <li><HiCheck /> <strong>Mở khóa toàn bộ</strong> video & đề thi</li>
-                <li><HiCheck /> <strong>AI phân tích</strong> lỗ hổng tức thì</li>
-                <li><HiCheck /> Lộ trình <strong>cá nhân hóa</strong> tự động</li>
-                <li><HiCheck /> <strong>EduBot AI</strong> hỏi đáp không giới hạn</li>
-                <li><HiCheck /> Hỗ trợ trực tiếp <strong>giáo viên bộ môn</strong></li>
-              </ul>
-              <button 
-                className="lp-btn lp-btn--accent lp-btn--full" 
-                onClick={() => currentUser ? onBackToDashboard('courses') : onNavigateToAuth('signup')}
-              >
-                {currentUser ? "Đăng ký khóa học ngay" : "Nâng cấp Premium Pro"} <HiLightningBolt />
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* ── CTA BANNER ── */}
       <section className="lp-cta-banner">
@@ -1204,7 +1157,7 @@ export default function LandingPage({
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
                         <div>
-                          <span style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase' }}>Học phí trọn gói</span>
+                          <span style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase' }}>Giá khóa học</span>
                           <span style={{ fontSize: '19px', color: 'var(--accent-orange)', fontWeight: '800' }}>{course.price}đ</span>
                         </div>
                         <div style={{ display: 'flex', gap: '8px' }}>
@@ -1356,83 +1309,7 @@ export default function LandingPage({
           </div>
         )}
 
-        {/* ================= 5. PRICING DEDICATED PAGE ================= */}
-        {activeLandingView === 'pricing' && (
-          <div className="lp-container" style={{ padding: '40px 28px 80px' }}>
-            <button 
-              onClick={() => setActiveLandingView('home')}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'var(--primary, #6c5ce7)',
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                fontSize: '14.5px',
-                marginBottom: '28px',
-                padding: 0
-              }}
-            >
-              ← Quay lại trang chủ
-            </button>
 
-            <div className="lp-modal-grid">
-              <div className="lp-modal-img-col" style={{ backgroundImage: `url(${studentSuccessImg})`, minHeight: '450px', borderRadius: '16px', overflow: 'hidden' }}>
-                <div className="lp-modal-img-overlay">
-                  <span className="lp-modal-badge" style={{ background: '#f59e0b' }}>🥇 Cam Kết Đạt Điểm Số</span>
-                  <h3>Cam Kết Hoàn Học Phí Nếu Không Đạt Mục Tiêu</h3>
-                </div>
-              </div>
-              <div className="lp-modal-info-col" style={{ padding: '0 10px' }}>
-                <span className="lp-eyebrow">HỌC PHÍ TỐI ƯU</span>
-                <h2 style={{ fontSize: '32px', fontWeight: '900', color: 'var(--lp-dark)', margin: '10px 0 18px 0' }}>Đầu tư thông minh cho tương lai đại học</h2>
-                <p style={{ fontSize: '14.5px', lineHeight: '1.7', color: 'var(--text-secondary)' }}>Tiết kiệm tối đa chi phí đi học thêm cồng kềnh. Mở khóa toàn bộ đặc quyền Premium Pro chỉ với mức học phí ưu đãi trọn gói hợp lý nhất.</p>
-                
-                <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '24px', fontSize: '13.5px' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '2px solid var(--border)', textAlign: 'left' }}>
-                      <th style={{ padding: '10px 0', fontWeight: 'bold', fontSize: '14px' }}>Đặc quyền gói Premium Pro</th>
-                      <th style={{ padding: '10px 0', fontWeight: 'bold', color: 'var(--primary)', fontSize: '14px' }}>Trọn đời</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Kho 1,200+ đề thi & video lý thuyết bám sát cấu trúc</td>
-                      <td style={{ padding: '10px 0', color: 'var(--accent-green)', fontWeight: 'bold' }}>✓ Mở khóa toàn bộ</td>
-                    </tr>
-                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Hệ thống Adaptive AI sửa sai & chẩn đoán điểm yếu</td>
-                      <td style={{ padding: '10px 0', color: 'var(--accent-green)', fontWeight: 'bold' }}>✓ Không giới hạn</td>
-                    </tr>
-                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Hỏi đáp EduBot AI 24/7 tức thời lời giải chi tiết</td>
-                      <td style={{ padding: '10px 0', color: 'var(--accent-green)', fontWeight: 'bold' }}>✓ Vô hạn lượt</td>
-                    </tr>
-                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '10px 0', color: 'var(--text-secondary)' }}>Hỗ trợ trực tiếp từ giáo viên chủ nhiệm môn học</td>
-                      <td style={{ padding: '10px 0', color: 'var(--accent-green)', fontWeight: 'bold' }}>✓ Đặc quyền Pro</td>
-                    </tr>
-                  </tbody>
-                </table>
-
-                <div style={{ marginTop: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-main, #f8fafc)', padding: '18px 24px', borderRadius: '16px', border: '1px solid var(--border)' }}>
-                  <div>
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Học phí trọn gói cam kết:</span>
-                    <div style={{ fontSize: '26px', fontWeight: '900', color: 'var(--accent-orange)', marginTop: '4px' }}>599.000đ <span style={{ fontSize: '13px', fontWeight: 'normal', color: 'var(--text-muted)' }}>/ trọn đời</span></div>
-                  </div>
-                  <button 
-                    className="lp-btn lp-btn--accent lp-btn--lg" 
-                    onClick={() => { if (currentUser) { onBackToDashboard('courses'); } else { onNavigateToAuth('signup'); } }}
-                  >
-                    {currentUser ? "Mua khóa học ngay ⚡" : "Nâng cấp Premium Pro"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* ================= 6. FORUM DEDICATED PAGE ================= */}
         {activeLandingView === 'forum' && (
@@ -1487,7 +1364,7 @@ export default function LandingPage({
               <p>Nền tảng luyện thi THPTQG thích ứng AI — học thông minh, đạt điểm cao.</p>
             </div>
             <div className="lp-footer__col">
-              <h4>Môn học</h4>
+              <h4>Khóa học</h4>
               <a href="#subjects" onClick={(e) => { e.preventDefault(); setActiveLandingView('subjects'); }}>Toán Học</a>
               <a href="#subjects" onClick={(e) => { e.preventDefault(); setActiveLandingView('subjects'); }}>Vật Lý</a>
               <a href="#subjects" onClick={(e) => { e.preventDefault(); setActiveLandingView('subjects'); }}>Tiếng Anh</a>
@@ -1497,7 +1374,6 @@ export default function LandingPage({
               <h4>Sản phẩm</h4>
               <a href="#features" onClick={(e) => { e.preventDefault(); setActiveLandingView('features'); }}>Tính năng</a>
               <a href="#forum" onClick={(e) => { e.preventDefault(); setActiveLandingView('forum'); }}>Diễn đàn</a>
-              <a href="#pricing" onClick={(e) => { e.preventDefault(); setActiveLandingView('pricing'); }}>Học phí</a>
               <a href="#stats" onClick={(e) => { e.preventDefault(); setActiveLandingView('about'); }}>Về chúng tôi</a>
             </div>
             <div className="lp-footer__col">
