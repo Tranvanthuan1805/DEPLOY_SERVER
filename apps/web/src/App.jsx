@@ -949,13 +949,7 @@ export default function App() {
 
               {/* Forum tab */}
               {activeTab === 'forum' && (
-                <Forum
-                  forumPosts={forumPosts}
-                  onAddPost={handleForumAddPost}
-                  onLikePost={handleForumLikePost}
-                  onAddComment={handleForumAddComment}
-                  currentUser={currentUser}
-                />
+                <Forum currentUser={currentUser} />
               )}
 
               {/* Online Mock Exams tab */}

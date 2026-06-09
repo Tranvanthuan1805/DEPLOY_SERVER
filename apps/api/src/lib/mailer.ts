@@ -95,6 +95,10 @@ export async function sendRoleChangeNotification(
   status: 'APPROVED' | 'REJECTED',
   newRole?: string
 ): Promise<boolean> {
+  const isApproved = status === 'APPROVED';
+  const statusText = isApproved ? 'ĐÃ ĐƯỢC DUYỆT ✅' : 'ĐÃ BỊ TỪ CHỐI ❌';
+  const statusColor = isApproved ? '#00b894' : '#e17055';
+
   if (!transporter) {
     console.warn(
       `\n============================================================\n` +
@@ -106,10 +110,6 @@ export async function sendRoleChangeNotification(
     );
     return true;
   }
-
-  const isApproved = status === 'APPROVED';
-  const statusText = isApproved ? 'ĐÃ ĐƯỢC DUYỆT ✅' : 'ĐÃ BỊ TỪ CHỐI ❌';
-  const statusColor = isApproved ? '#00b894' : '#e17055';
 
   const htmlContent = `
     <div style="font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6fa; padding: 30px 20px; color: #2d3436; line-height: 1.6;">
