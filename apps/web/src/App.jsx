@@ -1139,7 +1139,7 @@ export default function App() {
           )}
 
           {/* ================= PUBLIC OR PREVIEW LANDING PAGE ================= */}
-          {(role === 'guest' || activeTab === 'landing') && (
+          {(role === 'guest' || activeTab === 'landing') && !parsedRoute.route.startsWith('mock-') && (
             <div>
               {role === 'guest' && activeTab === 'reset-password' ? (
                 <div className="auth-page-layout" style={{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh', padding: '20px' }}>
@@ -1235,8 +1235,8 @@ export default function App() {
             </div>
           )}
 
-          {/* ================= MOCK EXAMS ROUTER WORKSPACE ================= */}
-          {role !== 'guest' && activeTab !== 'landing' && parsedRoute.route.startsWith('mock-') && (
+          {/* ================= MOCK EXAMS ROUTER WORKSPACE (PUBLIC ACCESS) ================= */}
+          {parsedRoute.route.startsWith('mock-') && (
             <div style={{ padding: '20px 0' }}>
               {parsedRoute.route === 'mock-exams-list' && (
                 <MockExamsPage
@@ -1330,7 +1330,12 @@ export default function App() {
 
               {/* Learning path adaptive roadmap tab */}
               {activeTab === 'path' && (
-                <AISystemCenter submissions={activeUserSubmissions} addLog={addLog} />
+                <AISystemCenter 
+                  submissions={activeUserSubmissions} 
+                  addLog={addLog} 
+                  currentUser={currentUser}
+                  navigateTo={navigateTo}
+                />
               )}
 
               {/* Courses tab */}
