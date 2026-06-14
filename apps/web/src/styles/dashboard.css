@@ -328,3 +328,17 @@
   .db-hero__left { flex-direction: column; align-items: flex-start; gap: 16px; }
   .db-achievements__grid { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* Custom styles for Adaptive AI Roadmap System */
+.concept-checklist-item {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.concept-checklist-item:hover {
+  background: var(--bg-main) !important;
+  transform: translateX(4px);
+  border-color: var(--primary) !important;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

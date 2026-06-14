@@ -60,92 +60,184 @@ export default function MockExamsPage({ currentUser, onSelectExam, navigateTo })
     navigateTo(`/mock-exams/${examId}/start`);
   };
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '1100px', margin: '0 auto', padding: '0 16px' }} className="animate-in">
-      {!currentUser && (
-        <button 
-          onClick={() => navigateTo('/')}
-          style={{
-            border: 'none', background: 'none', cursor: 'pointer',
-            color: 'var(--text-secondary)', fontWeight: 'bold', fontSize: '13.5px',
-            display: 'flex', alignItems: 'center', gap: '6px', width: 'fit-content',
-            padding: '12px 0 0 0'
-          }}
-        >
-          ← Quay lại trang chủ
-        </button>
-      )}
-      
-      {/* Hero Banner with statistics */}
-      <div className="exams-hero-banner">
-        <span className="badge-pill" style={{ background: 'rgba(255, 255, 255, 0.2)', color: '#fff', fontSize: '11px', fontWeight: 'bold', display: 'inline-block', marginBottom: '12px' }}>
-          Học đúng hướng · Thi đúng đích cùng EduPath AI 🎓
-        </span>
-        <h2 style={{ fontSize: '28px', fontWeight: '950', color: '#fff', margin: '0 0 8px 0', lineHeight: 1.2 }}>
-          TRUNG TÂM LUYỆN THI THỬ QUỐC GIA
-        </h2>
-        <p style={{ fontSize: '13.5px', color: '#f3e8ff', margin: '0 0 24px 0', maxWidth: '650px', lineHeight: 1.5 }}>
-          Tổng hợp kho đề thi chính thức từ Bộ GD&ĐT qua các năm và đề thi thử từ các trường chuyên danh tiếng trên cả nước. Chấm điểm tự động và chẩn đoán lỗ hổng kiến thức bằng AI.
-        </p>
+  // Stats
+  const subjectCounts = {};
+  exams.forEach(e => {
+    const name = e.exam_subjects?.name || (e.subject_id === 1 ? 'Toán học' : e.subject_id === 2 ? 'Tiếng Anh' : e.subject_id === 3 ? 'Vật lý' : 'Hóa học');
+    subjectCounts[name] = (subjectCounts[name] || 0) + 1;
+  });
 
-        {/* Hero counters */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '16px' }}>
-          <div style={{ background: 'rgba(255, 255, 255, 0.1)', padding: '12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.15)' }}>
-            <span style={{ display: 'block', fontSize: '10px', color: 'rgba(255,255,255,0.7)', fontWeight: 'bold' }}>TỔNG SỐ ĐỀ THI</span>
-            <strong style={{ fontSize: '20px', color: '#fff', fontWeight: '900' }}>{exams.length}+ Bộ đề</strong>
-          </div>
-          <div style={{ background: 'rgba(255, 255, 255, 0.1)', padding: '12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.15)' }}>
-            <span style={{ display: 'block', fontSize: '10px', color: 'rgba(255,255,255,0.7)', fontWeight: 'bold' }}>LƯỢT THI TUẦN</span>
-            <strong style={{ fontSize: '20px', color: '#fff', fontWeight: '900' }}>15,200+ Lượt</strong>
-          </div>
-          <div style={{ background: 'rgba(255, 255, 255, 0.1)', padding: '12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.15)' }}>
-            <span style={{ display: 'block', fontSize: '10px', color: 'rgba(255,255,255,0.7)', fontWeight: 'bold' }}>ĐÁP ÁN CHÍNH THỨC</span>
-            <strong style={{ fontSize: '20px', color: '#fff', fontWeight: '900' }}>100% Khớp</strong>
-          </div>
-          <div style={{ background: 'rgba(255, 255, 255, 0.1)', padding: '12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.15)' }}>
-            <span style={{ display: 'block', fontSize: '10px', color: 'rgba(255,255,255,0.7)', fontWeight: 'bold' }}>EDU BOT AI</span>
-            <strong style={{ fontSize: '20px', color: '#fff', fontWeight: '900' }}>Hỗ trợ 24/7</strong>
+  return (
+    <div className="mock-exams-public-page animate-in">
+      {/* ── Public Navigation Header (for guests) ── */}
+      {!currentUser && (
+        <div className="mock-exams-public-nav">
+          <div className="mock-exams-nav-inner">
+            <button 
+              onClick={() => navigateTo('/')}
+              className="mock-exams-logo-btn"
+            >
+              <span className="mock-exams-logo-icon">📚</span>
+              <span className="mock-exams-logo-text">EduPath AI</span>
+            </button>
+
+            <div className="mock-exams-nav-links">
+              <button onClick={() => navigateTo('/')} className="mock-exams-nav-link">
+                Trang chủ
+              </button>
+              <button onClick={() => navigateTo('/mock-exams')} className="mock-exams-nav-link active">
+                Thi thử
+              </button>
+            </div>
+
+            <div className="mock-exams-nav-actions">
+              <button 
+                onClick={() => navigateTo('/')} 
+                className="mock-exams-login-btn"
+              >
+                Đăng nhập
+              </button>
+              <button 
+                onClick={() => navigateTo('/')} 
+                className="mock-exams-signup-btn"
+              >
+                Đăng ký miễn phí
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Filter panel */}
-      <MockExamFilters 
-        filters={filters} 
-        onFilterChange={setFilters} 
-        subjects={subjects} 
-      />
+      <div className="mock-exams-content-wrapper">
+        {/* ── Hero Banner with Animated Stats ── */}
+        <div className="exams-hero-banner">
+          <div className="exams-hero-particles">
+            <div className="particle p1"></div>
+            <div className="particle p2"></div>
+            <div className="particle p3"></div>
+          </div>
+          <div className="exams-hero-inner">
+            <span className="badge-pill" style={{ background: 'rgba(255, 255, 255, 0.2)', color: '#fff', fontSize: '11px', fontWeight: 'bold', display: 'inline-block', marginBottom: '12px', backdropFilter: 'blur(4px)' }}>
+              Học đúng hướng · Thi đúng đích cùng EduPath AI 🎓
+            </span>
+            <h1 className="exams-hero-title">
+              TRUNG TÂM LUYỆN THI THỬ <span className="exams-hero-highlight">QUỐC GIA</span>
+            </h1>
+            <p className="exams-hero-desc">
+              Tổng hợp kho đề thi chính thức từ Bộ GD&ĐT qua các năm (2020–2024) và đề thi thử từ các trường chuyên danh tiếng trên cả nước. Trải nghiệm thi như thật với đồng hồ đếm ngược, chống gian lận và chấm điểm tự động.
+            </p>
 
-      {/* Exam Grid */}
-      {loading ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '24px' }}>
-          {[1, 2, 3, 4].map(idx => (
-            <div key={idx} style={{ height: '340px', borderRadius: '16px', background: 'var(--bg-card)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
-                <div style={{ fontSize: '24px', animation: 'pulse 1.5s infinite alternate' }}>⏳</div>
-                <div style={{ fontSize: '12px', marginTop: '8px' }}>Đang tải đề thi...</div>
+            {/* Hero counters with enhanced animation */}
+            <div className="exams-hero-stats-grid">
+              <div className="exams-hero-stat-card">
+                <span className="stat-icon">📋</span>
+                <span className="stat-number">{exams.length}+</span>
+                <span className="stat-label">BỘ ĐỀ THI</span>
+              </div>
+              <div className="exams-hero-stat-card">
+                <span className="stat-icon">🗓️</span>
+                <span className="stat-number">5 NĂM</span>
+                <span className="stat-label">2020 – 2024</span>
+              </div>
+              <div className="exams-hero-stat-card">
+                <span className="stat-icon">📐</span>
+                <span className="stat-number">4 MÔN</span>
+                <span className="stat-label">TOÁN · LÝ · HÓA · ANH</span>
+              </div>
+              <div className="exams-hero-stat-card">
+                <span className="stat-icon">🤖</span>
+                <span className="stat-number">AI</span>
+                <span className="stat-label">CHẤM & PHÂN TÍCH</span>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Subject Quick Summary Cards */}
+        <div className="exams-subject-summary-row">
+          {subjects.map(sub => (
+            <button
+              key={sub.id}
+              onClick={() => setFilters(f => ({ ...f, subjectId: String(filters.subjectId) === String(sub.id) ? 'All' : sub.id }))}
+              className={`exams-subject-card ${String(filters.subjectId) === String(sub.id) ? 'active' : ''}`}
+            >
+              <span className="subject-card-icon">{sub.icon}</span>
+              <span className="subject-card-name">{sub.name}</span>
+              <span className="subject-card-count">{subjectCounts[sub.name] || 0} đề</span>
+            </button>
           ))}
         </div>
-      ) : exams.length > 0 ? (
-        <div className="exam-cards-grid" style={{ marginBottom: '40px' }}>
-          {exams.map(exam => (
-            <MockExamCard 
-              key={exam.id} 
-              exam={exam} 
-              onSelect={onSelectExam} 
-              onStart={handleStartExam} 
-            />
-          ))}
-        </div>
-      ) : (
-        <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--bg-card)', borderRadius: '16px', border: '1px solid var(--border)' }}>
-          <span style={{ fontSize: '48px' }}>📂</span>
-          <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: '16px 0 8px 0', color: 'var(--text-primary)' }}>Không tìm thấy đề thi phù hợp</h3>
-          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>Vui lòng thay đổi từ khóa hoặc điều chỉnh bộ lọc tìm kiếm.</p>
-        </div>
-      )}
+
+        {/* Filter panel */}
+        <MockExamFilters 
+          filters={filters} 
+          onFilterChange={setFilters} 
+          subjects={subjects} 
+        />
+
+        {/* Exam Grid */}
+        {loading ? (
+          <div className="exam-cards-grid">
+            {[1, 2, 3, 4, 5, 6].map(idx => (
+              <div key={idx} className="exam-skeleton-card">
+                <div className="skeleton-header"></div>
+                <div className="skeleton-body">
+                  <div className="skeleton-line w80"></div>
+                  <div className="skeleton-line w60"></div>
+                  <div className="skeleton-line w40"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : exams.length > 0 ? (
+          <>
+            <div className="exams-results-bar">
+              <span className="results-count">
+                🔎 Tìm thấy <strong>{exams.length}</strong> đề thi phù hợp
+              </span>
+            </div>
+            <div className="exam-cards-grid" style={{ marginBottom: '40px' }}>
+              {exams.map(exam => (
+                <MockExamCard 
+                  key={exam.id} 
+                  exam={exam} 
+                  onSelect={onSelectExam} 
+                  onStart={handleStartExam} 
+                />
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="exams-empty-state">
+            <span className="empty-icon">📂</span>
+            <h3 className="empty-title">Không tìm thấy đề thi phù hợp</h3>
+            <p className="empty-desc">Vui lòng thay đổi từ khóa hoặc điều chỉnh bộ lọc tìm kiếm.</p>
+            <button 
+              className="btn-primary"
+              onClick={() => setFilters({ search: '', subjectId: 'All', year: 'All', examType: 'All' })}
+              style={{ marginTop: '12px', background: 'var(--exams-purple)', border: 'none', cursor: 'pointer' }}
+            >
+              Xóa bộ lọc
+            </button>
+          </div>
+        )}
+
+        {/* CTA Banner for guests */}
+        {!currentUser && (
+          <div className="exams-cta-banner">
+            <div className="cta-content">
+              <h3 className="cta-title">🚀 Đăng ký tài khoản miễn phí</h3>
+              <p className="cta-desc">Lưu lịch sử làm bài, nhận phân tích kết quả từ AI và theo dõi tiến trình ôn tập.</p>
+            </div>
+            <button 
+              className="cta-btn"
+              onClick={() => navigateTo('/')}
+            >
+              Đăng ký ngay →
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
