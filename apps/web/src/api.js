@@ -55,6 +55,9 @@ export const api = {
   forgotPassword: (email) =>
     request('/auth/forgot-password', { method: 'POST', body: { email } }),
 
+  verifyResetOtp: (email, otp) =>
+    request('/auth/verify-reset-otp', { method: 'POST', body: { email, otp } }),
+
   resetPassword: (token, password) =>
     request('/auth/reset-password', { method: 'POST', body: { token, password } }),
 
@@ -75,6 +78,16 @@ export const api = {
       }
     });
     return request(`/exams?${params.toString()}`);
+  },
+
+  getDocumentResources: (filters = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') {
+        params.append(k, String(v));
+      }
+    });
+    return request(`/document-resources?${params.toString()}`);
   },
 
   getExamById: (examId) => request(`/exams/${examId}`),

@@ -4,11 +4,12 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { initSocket } from './lib/socket.js';
 
-import { login, logout, sendOtp, resendOtp, verifyOtpRegister, googleAuth, googleCompleteOnboarding, changePassword, forgotPassword, resetPassword, requestRoleChange, getRoleChangeRequests, reviewRoleChange } from './controllers/auth.js';
+import { login, logout, sendOtp, resendOtp, verifyOtpRegister, googleAuth, googleCompleteOnboarding, changePassword, forgotPassword, verifyResetOtp, resetPassword, requestRoleChange, getRoleChangeRequests, reviewRoleChange } from './controllers/auth.js';
 import { getCourses, getCourseById, createCourse, getCourseStats } from './controllers/course.js';
 import { getExams, getExamById, startAttempt, saveAnswer, submitAttempt, getAttempts, getExamQuestionsPublic, getAttemptById, getAttemptResult, getExamHistory, recordViolation, recordExamEvent, getExamEvents, recordViolationDetail, generateAiCoach, createSmartRetake, importExam } from './controllers/exam.js';
 import { streamAIChat, refreshRoadmap, generateAIQuestions } from './controllers/ai.js';
 import { chatbotConsult } from './controllers/chatbot.js';
+import { getDocumentResources } from './controllers/document.js';
 import { createVNPayPayment, vnpayWebhook, sepayWebhook, checkEnrollmentStatus, checkUserProStatus } from './controllers/payment.js';
 import { authenticateJWT, requireRole } from './middleware/auth.js';
 import { 
@@ -54,6 +55,7 @@ app.post('/auth/resend-otp', resendOtp);
 app.post('/auth/verify-otp-register', verifyOtpRegister);
 app.post('/auth/google', googleAuth);
 app.post('/auth/forgot-password', forgotPassword);
+app.post('/auth/verify-reset-otp', verifyResetOtp);
 app.post('/auth/reset-password', resetPassword);
 app.post('/auth/google/complete-onboarding', googleCompleteOnboarding);
 app.post('/auth/change-password', authenticateJWT, changePassword);
@@ -69,6 +71,9 @@ app.get('/courses', getCourses);
 app.get('/courses/:id', getCourseById);
 app.get('/courses/:id/stats', getCourseStats);
 app.post('/courses', authenticateJWT, requireRole(['TEACHER', 'ADMIN']), createCourse);
+
+// Document Resource Routes
+app.get('/document-resources', getDocumentResources);
 
 // Protected Exam Routes
 app.get('/exams', getExams);

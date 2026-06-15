@@ -18,8 +18,8 @@ const navGroups = {
     {
       groupLabel: '✏️ Luyện tập',
       items: [
-        { label: 'Thi thử THPTQG', id: 'tests', icon: HiClipboardCheck },
-        { label: 'Ngân hàng đề', id: 'library', icon: HiBookOpen },
+        { label: 'Ngân hàng đề thi', id: 'tests', icon: HiClipboardCheck },
+        { label: 'Ngân hàng tài liệu', id: 'library', icon: HiBookOpen },
       ],
     },
     {

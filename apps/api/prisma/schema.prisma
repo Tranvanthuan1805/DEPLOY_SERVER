@@ -602,3 +602,23 @@ model ForumAuditLog {
   createdAt      DateTime        @default(now())
 }
 
+model DocumentResource {
+  id                  Int      @id @default(autoincrement())
+  title               String
+  description         String?  @db.Text
+  subject             String
+  level               String
+  isFree              Boolean  @default(false)
+  driveUrl            String?
+  imageUrl            String?
+  price               Int      @default(0)
+  isActive            Boolean  @default(true)
+  isDeleted           Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @default(now()) @updatedAt
+  commissionPercent   Float?
+  markdownDescription String?  @db.Text
+
+  @@map("document_resources")
+}
+
