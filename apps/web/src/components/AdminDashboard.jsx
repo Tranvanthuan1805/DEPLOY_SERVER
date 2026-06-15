@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { toast } from '../utils/toast';
 import { HiTerminal, HiUsers, HiClipboardCheck, HiGlobeAlt, HiAdjustments, HiTrendingUp } from 'react-icons/hi';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -19,9 +20,19 @@ export default function AdminDashboard({
   onRejectCourse,
   onSendAnnouncement,
   systemLogs,
-  addLog
+  addLog,
+  activeTab: propActiveTab = 'home',
+  setActiveTab
 }) {
-  const [activeTab, setActiveTab] = useState('logs'); // 'logs', 'users', 'courses', 'announcements', 'finance', 'ai-config'
+  const currentTab = propActiveTab === 'home' ? 'logs' : propActiveTab;
+
+  const handleTabChange = (tab) => {
+    if (tab === 'logs') {
+      setActiveTab('home');
+    } else {
+      setActiveTab(tab);
+    }
+  };
   
   // Announcement states
   const [annText, setAnnText] = useState('');
@@ -38,12 +49,12 @@ export default function AdminDashboard({
     onSendAnnouncement(annText);
     setAnnText('');
     addLog(`Quản trị viên phát hành thông báo hệ thống: "${annText}"`, 'sys');
-    alert('Đã gửi thông báo hệ thống đến tất cả người dùng!');
+    toast('Đã gửi thông báo hệ thống đến tất cả người dùng!', 'success');
   };
 
   const handleUpdateAIWeights = () => {
     addLog(`[AI Config] Cập nhật trọng số thuật toán thích ứng (Khó: ${aiWeightDifficulty}%, Điểm yếu: ${aiWeightWeakness}%, Lộ trình: ${aiWeightRoadmap}%)`, 'sys');
-    alert('Cập nhật cấu hình thuật toán AI thành công!');
+    toast('Cập nhật cấu hình thuật toán AI thành công!', 'success');
   };
 
   return (
@@ -51,50 +62,50 @@ export default function AdminDashboard({
       {/* Sub navigation tabs */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', background: 'var(--bg-card)', padding: '10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', overflowX: 'auto' }}>
         <button
-          className={`demo-role-btn ${activeTab === 'logs' ? 'active' : ''}`}
-          onClick={() => setActiveTab('logs')}
+          className={`demo-role-btn ${currentTab === 'logs' ? 'active' : ''}`}
+          onClick={() => handleTabChange('logs')}
           style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}
         >
           <HiTerminal /> Nhật ký hệ thống (Logs)
         </button>
         <button
-          className={`demo-role-btn ${activeTab === 'users' ? 'active' : ''}`}
-          onClick={() => setActiveTab('users')}
+          className={`demo-role-btn ${currentTab === 'users' ? 'active' : ''}`}
+          onClick={() => handleTabChange('users')}
           style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}
         >
           <HiUsers /> Quản lý người dùng
         </button>
         <button
-          className={`demo-role-btn ${activeTab === 'courses' ? 'active' : ''}`}
-          onClick={() => setActiveTab('courses')}
+          className={`demo-role-btn ${currentTab === 'courses' ? 'active' : ''}`}
+          onClick={() => handleTabChange('courses')}
           style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}
         >
           <HiClipboardCheck /> Phê duyệt khóa học ({courseApprovals.length})
         </button>
         <button
-          className={`demo-role-btn ${activeTab === 'announcements' ? 'active' : ''}`}
-          onClick={() => setActiveTab('announcements')}
+          className={`demo-role-btn ${currentTab === 'announcements' ? 'active' : ''}`}
+          onClick={() => handleTabChange('announcements')}
           style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}
         >
           <HiGlobeAlt /> Gửi thông báo chung
         </button>
         <button
-          className={`demo-role-btn ${activeTab === 'finance' ? 'active' : ''}`}
-          onClick={() => setActiveTab('finance')}
+          className={`demo-role-btn ${currentTab === 'finance' ? 'active' : ''}`}
+          onClick={() => handleTabChange('finance')}
           style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}
         >
           <HiTrendingUp /> Thống kê doanh thu
         </button>
         <button
-          className={`demo-role-btn ${activeTab === 'ai-config' ? 'active' : ''}`}
-          onClick={() => setActiveTab('ai-config')}
+          className={`demo-role-btn ${currentTab === 'ai-config' ? 'active' : ''}`}
+          onClick={() => handleTabChange('ai-config')}
           style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}
         >
           <HiAdjustments /> Cấu hình hệ thống AI
         </button>
       </div>
 
-      {activeTab === 'logs' && (
+      {currentTab === 'logs' && (
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
             <h3 style={{ fontSize: '15px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -121,7 +132,7 @@ export default function AdminDashboard({
         </div>
       )}
 
-      {activeTab === 'users' && (
+      {currentTab === 'users' && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
           {/* User Account Controls */}
           <div className="card">
@@ -179,7 +190,7 @@ export default function AdminDashboard({
                         onClick={() => {
                           onApproveTeacher(u.name, u.combo || 'Tổng hợp');
                           addLog(`Quản trị viên cấp duyệt tài khoản "${u.name}" thành vai trò GIÁO VIÊN`, 'sys');
-                          alert(`Phê duyệt hồ sơ giáo viên "${u.name}" thành công!`);
+                          toast(`Phê duyệt hồ sơ giáo viên "${u.name}" thành công!`, 'success');
                         }}
                       >
                         Phê duyệt Cấp quyền
@@ -188,7 +199,7 @@ export default function AdminDashboard({
                         className="btn-outline"
                         style={{ padding: '5px 14px', fontSize: '11px', color: 'var(--accent-red)', borderColor: 'var(--accent-red)' }}
                         onClick={() => {
-                          alert(`Đã từ chối hồ sơ của ứng viên "${u.name}".`);
+                          toast(`Đã từ chối hồ sơ của ứng viên "${u.name}".`, 'warning');
                         }}
                       >
                         Từ chối
@@ -207,7 +218,7 @@ export default function AdminDashboard({
         </div>
       )}
 
-      {activeTab === 'courses' && (
+      {currentTab === 'courses' && (
         <div className="card">
           <h3 style={{ fontSize: '15px', fontWeight: 'bold', marginBottom: '16px' }}>KIỂM DUYỆT KHÓA HỌC MỚI</h3>
           {courseApprovals.length > 0 ? (
@@ -252,7 +263,7 @@ export default function AdminDashboard({
         </div>
       )}
 
-      {activeTab === 'announcements' && (
+      {currentTab === 'announcements' && (
         <div className="card" style={{ maxWidth: '600px' }}>
           <h3 style={{ fontSize: '15px', fontWeight: 'bold', marginBottom: '16px' }}>GỬI THÔNG BÁO TOÀN HỆ THỐNG</h3>
           <form onSubmit={handleSendAnnouncement} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -275,7 +286,7 @@ export default function AdminDashboard({
         </div>
       )}
 
-      {activeTab === 'finance' && (
+      {currentTab === 'finance' && (
         <div className="card">
           <h3 style={{ fontSize: '15px', fontWeight: 'bold', marginBottom: '16px' }}>BÁO CÁO THỐNG KÊ DOANH THU HỌC LIỆU</h3>
           <div style={{ height: '300px', width: '100%', marginTop: '10px' }}>
@@ -301,7 +312,7 @@ export default function AdminDashboard({
         </div>
       )}
 
-      {activeTab === 'ai-config' && (
+      {currentTab === 'ai-config' && (
         <div className="card" style={{ maxWidth: '600px' }}>
           <h3 style={{ fontSize: '15px', fontWeight: 'bold', marginBottom: '16px' }}>CẤU HÌNH THAM SỐ THUẬT TOÁN AI THÍCH ỨNG</h3>
           <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', marginBottom: '20px' }}>

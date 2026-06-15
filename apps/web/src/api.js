@@ -52,6 +52,42 @@ export const api = {
   changePassword: (oldPassword, newPassword) =>
     request('/auth/change-password', { method: 'POST', body: { oldPassword, newPassword } }),
 
+  forgotPassword: (email) =>
+    request('/auth/forgot-password', { method: 'POST', body: { email } }),
+
+  resetPassword: (token, password) =>
+    request('/auth/reset-password', { method: 'POST', body: { token, password } }),
+
+  getCourses: (filters = {}) => {
+    const params = new URLSearchParams(filters).toString();
+    return request(`/courses?${params}`);
+  },
+
+  getCourseById: (id) => request(`/courses/${id}`),
+
+  createCourse: (payload) => request('/courses', { method: 'POST', body: payload }),
+
+  getExams: (subject) => request(`/exams${subject ? `?subject=${subject}` : ''}`),
+
+  getExamQuestionsPublic: (examId) => request(`/exams/${examId}/questions`),
+
+  getAttempts: () => request('/exams/attempts'),
+
+  getAttemptById: (attemptId) => request(`/exams/attempts/${attemptId}`),
+
+  startAttempt: (examId) => request(`/exams/${examId}/attempts`, { method: 'POST' }),
+
+  submitAttempt: (examId, attemptId, answers) => 
+    request(`/exams/${examId}/attempts/${attemptId}/submit`, { method: 'POST', body: { answers } }),
+
+  refreshRoadmap: () => request('/ai/roadmap/refresh', { method: 'POST' }),
+
+  createVNPayPayment: (courseId) => request('/enrollments', { method: 'POST', body: { courseId } }),
+
+  checkEnrollmentStatus: (courseId) => request(`/enrollments/status?courseId=${courseId}`),
+
+  checkProStatus: () => request('/users/pro-status'),
+
   requestRoleChange: (requestedRole, reason) =>
     request('/auth/role-change-request', { method: 'POST', body: { requestedRole, reason } }),
 
@@ -127,6 +163,6 @@ export const api = {
     request(`/forum/resources/${id}/download`, { method: 'POST' }),
 
   createForumReport: (postId, commentId, reason) =>
-    request('/forum/moderation/reports', { method: 'POST', body: { postId, commentId, reason } }),
+    request('/forum/moderation/reports', { method: 'POST', body: { postId, commentId, reason } })
 };
 
