@@ -23,6 +23,9 @@ if (smtpUser && smtpPass && !isPlaceholder) {
 }
 
 export async function sendOTPEmail(toEmail: string, studentName: string, otp: string): Promise<boolean> {
+  const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+  const confirmLink = `${clientUrl}/confirm-email?token=${otp}&email=${encodeURIComponent(toEmail)}`;
+
   if (!transporter) {
     console.warn(
       `\n============================================================\n` +
@@ -30,6 +33,7 @@ export async function sendOTPEmail(toEmail: string, studentName: string, otp: st
       `Gửi tới: ${toEmail}\n` +
       `Tên học sinh: ${studentName}\n` +
       `Mã OTP: ${otp}\n` +
+      `Link xác thực nhanh: ${confirmLink}\n` +
       `============================================================\n`
     );
     return true; // Return true to allow registration testing in development
@@ -59,6 +63,14 @@ export async function sendOTPEmail(toEmail: string, studentName: string, otp: st
             <div style="font-size: 11.5px; color: #636e72; margin-top: 10px; font-style: italic;">Mã có hiệu lực trong vòng 10 phút. Tuyệt đối không chia sẻ mã này cho bất kỳ ai!</div>
           </div>
           
+          <!-- Quick Verification Link -->
+          <div style="text-align: center; margin: 28px 0; padding: 10px; background: #fafafa; border-radius: 12px; border: 1px solid #eee;">
+            <p style="font-size: 13.5px; color: #475569; margin: 0 0 14px 0; font-weight: 600;">Hoặc kích hoạt nhanh tài khoản bằng cách nhấn nút dưới đây:</p>
+            <a href="${confirmLink}" target="_blank" style="background: linear-gradient(135deg, #6c5ce7, #8e2de2); color: #ffffff; text-decoration: none; padding: 12px 28px; font-size: 14px; font-weight: 800; border-radius: 8px; display: inline-block; box-shadow: 0 4px 12px rgba(108,92,231,0.2); border: 1.5px solid #000000; text-transform: uppercase; letter-spacing: 0.5px;">
+              Kích hoạt tài khoản ngay
+            </a>
+          </div>
+
           <p style="font-size: 13px; color: #94a3b8; margin: 24px 0 0 0; line-height: 1.5;">
             Nếu em không thực hiện yêu cầu đăng ký này tại EduPath, em có thể bỏ qua email này một cách an toàn.
           </p>

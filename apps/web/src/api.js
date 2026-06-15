@@ -67,7 +67,17 @@ export const api = {
 
   createCourse: (payload) => request('/courses', { method: 'POST', body: payload }),
 
-  getExams: (subject) => request(`/exams${subject ? `?subject=${subject}` : ''}`),
+  getExams: (filters = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') {
+        params.append(k, String(v));
+      }
+    });
+    return request(`/exams?${params.toString()}`);
+  },
+
+  getExamById: (examId) => request(`/exams/${examId}`),
 
   getExamQuestionsPublic: (examId) => request(`/exams/${examId}/questions`),
 
@@ -75,10 +85,34 @@ export const api = {
 
   getAttemptById: (attemptId) => request(`/exams/attempts/${attemptId}`),
 
-  startAttempt: (examId) => request(`/exams/${examId}/attempts`, { method: 'POST' }),
+  startAttempt: (examId, retakeMode = null, questionIds = []) => request('/exam-attempts/start', { method: 'POST', body: { examId, retakeMode, questionIds } }),
 
-  submitAttempt: (examId, attemptId, answers) => 
-    request(`/exams/${examId}/attempts/${attemptId}/submit`, { method: 'POST', body: { answers } }),
+  saveAttemptAnswer: (attemptId, questionId, selectedAnswer) =>
+    request(`/exam-attempts/${attemptId}/save-answer`, { method: 'POST', body: { questionId, selectedAnswer } }),
+
+  submitAttempt: (attemptId, answers = [], retakeMode = null, questionIds = []) => 
+    request(`/exam-attempts/${attemptId}/submit`, { method: 'POST', body: { answers, retakeMode, questionIds } }),
+
+  getAttemptResult: (attemptId) => request(`/exam-attempts/${attemptId}/result`),
+
+  getExamHistory: () => request('/users/me/exam-history'),
+
+  recordViolation: (attemptId) => request(`/exam-attempts/${attemptId}/violation`, { method: 'POST' }),
+
+  recordViolationDetail: (attemptId, violationType) =>
+    request(`/exam-attempts/${attemptId}/violation-detail`, { method: 'POST', body: { violationType } }),
+
+  recordExamEvent: (attemptId, eventType, questionId, payload) =>
+    request(`/exam-attempts/${attemptId}/events`, { method: 'POST', body: { eventType, questionId, payload } }),
+
+  getExamEvents: (attemptId) =>
+    request(`/exam-attempts/${attemptId}/events`),
+
+  generateAiCoach: (attemptId) =>
+    request(`/exam-attempts/${attemptId}/ai-coach`, { method: 'POST' }),
+
+  createSmartRetake: (examId, mode, attemptId) =>
+    request(`/exams/${examId}/smart-retake`, { method: 'POST', body: { mode, attemptId } }),
 
   refreshRoadmap: () => request('/ai/roadmap/refresh', { method: 'POST' }),
 
@@ -163,6 +197,9 @@ export const api = {
     request(`/forum/resources/${id}/download`, { method: 'POST' }),
 
   createForumReport: (postId, commentId, reason) =>
-    request('/forum/moderation/reports', { method: 'POST', body: { postId, commentId, reason } })
+    request('/forum/moderation/reports', { method: 'POST', body: { postId, commentId, reason } }),
+
+  importExam: (examData) =>
+    request('/admin/exams/import', { method: 'POST', body: examData })
 };
 

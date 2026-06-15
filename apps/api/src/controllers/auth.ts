@@ -248,20 +248,26 @@ export async function sendOtp(req: Request, res: Response) {
     // Send email via SMTP
     const emailSent = await sendOTPEmail(email, fullName, otp);
 
-    if (emailSent) {
+    if (emailSent && isRealSmtpActive) {
       return res.status(200).json({
         success: true,
         data: {
           message: 'Đã gửi mã OTP đến email của bạn. Hãy kiểm tra hộp thư (bao gồm cả mục Spam)!',
           expiresInMinutes: 10,
-          cooldownSeconds: 60,
-          devOtp: !isRealSmtpActive ? otp : undefined
+          cooldownSeconds: 60
         }
       });
     } else {
-      return res.status(500).json({
-        success: false,
-        error: 'Không thể gửi email OTP. Hệ thống SMTP chưa được cấu hình. Vui lòng liên hệ quản trị viên.'
+      return res.status(200).json({
+        success: true,
+        data: {
+          message: emailSent
+            ? 'Đang chạy ở chế độ thử nghiệm (không gửi email thực). Bạn có thể sử dụng mã OTP hiển thị trên màn hình.'
+            : 'Gửi email OTP thất bại. Hệ thống tự động chuyển sang chế độ thử nghiệm. Bạn có thể sử dụng mã OTP hiển thị trên màn hình.',
+          expiresInMinutes: 10,
+          cooldownSeconds: 60,
+          devOtp: otp
+        }
       });
     }
   } catch (err: any) {
@@ -339,20 +345,26 @@ export async function resendOtp(req: Request, res: Response) {
     // Send email
     const emailSent = await sendOTPEmail(email, payload.fullName || email, otp);
 
-    if (emailSent) {
+    if (emailSent && isRealSmtpActive) {
       return res.status(200).json({
         success: true,
         data: {
           message: 'Đã gửi lại mã OTP mới. Hãy kiểm tra hộp thư (bao gồm cả mục Spam)!',
           expiresInMinutes: 10,
-          cooldownSeconds: 60,
-          devOtp: !isRealSmtpActive ? otp : undefined
+          cooldownSeconds: 60
         }
       });
     } else {
-      return res.status(500).json({
-        success: false,
-        error: 'Không thể gửi email OTP. Hệ thống SMTP chưa được cấu hình. Vui lòng liên hệ quản trị viên.'
+      return res.status(200).json({
+        success: true,
+        data: {
+          message: emailSent
+            ? 'Đã gửi lại mã OTP mới (chế độ thử nghiệm).'
+            : 'Gửi lại email OTP thất bại. Hệ thống tự động chuyển sang chế độ thử nghiệm.',
+          expiresInMinutes: 10,
+          cooldownSeconds: 60,
+          devOtp: otp
+        }
       });
     }
   } catch (err: any) {

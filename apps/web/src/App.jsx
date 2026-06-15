@@ -41,6 +41,7 @@ import AITutorPage from './pages/AITutorPage';
 import './styles/aitutor.css';
 import ExamBankPage from './pages/ExamBankPage';
 import './styles/exambank.css';
+import ConfirmEmailPage from './pages/ConfirmEmailPage';
 
 
 import { HiPlay, HiDocumentDownload, HiBeaker, HiX, HiBookOpen } from 'react-icons/hi';
@@ -540,8 +541,8 @@ export default function App() {
     };
   }, []);
 
-  const navigateTo = (path) => {
-    window.history.pushState({}, '', path);
+  const navigateTo = (path, state = null) => {
+    window.history.pushState(state || {}, '', path);
     setCurrentPath(path);
   };
 
@@ -579,6 +580,10 @@ export default function App() {
 
     if (currentPath === '/exam-bank') {
       return { route: 'exam-bank' };
+    }
+
+    if (currentPath.startsWith('/confirm-email')) {
+      return { route: 'confirm-email' };
     }
 
     return { route: 'legacy' };
@@ -1300,6 +1305,18 @@ export default function App() {
                   navigateTo={navigateTo}
                 />
               )}
+            </div>
+          )}
+
+          {/* ================= CONFIRM EMAIL WORKSPACE ================= */}
+          {parsedRoute.route === 'confirm-email' && (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh', padding: '40px 20px' }}>
+              <ConfirmEmailPage
+                onAuthSuccess={(user) => {
+                  handleAuthSuccess(user);
+                }}
+                navigateTo={navigateTo}
+              />
             </div>
           )}
 

@@ -6,7 +6,7 @@ import { initSocket } from './lib/socket.js';
 
 import { login, logout, sendOtp, resendOtp, verifyOtpRegister, googleAuth, googleCompleteOnboarding, changePassword, forgotPassword, resetPassword, requestRoleChange, getRoleChangeRequests, reviewRoleChange } from './controllers/auth.js';
 import { getCourses, getCourseById, createCourse, getCourseStats } from './controllers/course.js';
-import { getExams, startAttempt, submitAttempt, getAttempts, getExamQuestionsPublic, getAttemptById } from './controllers/exam.js';
+import { getExams, getExamById, startAttempt, saveAnswer, submitAttempt, getAttempts, getExamQuestionsPublic, getAttemptById, getAttemptResult, getExamHistory, recordViolation, recordExamEvent, getExamEvents, recordViolationDetail, generateAiCoach, createSmartRetake, importExam } from './controllers/exam.js';
 import { streamAIChat, refreshRoadmap, generateAIQuestions } from './controllers/ai.js';
 import { chatbotConsult } from './controllers/chatbot.js';
 import { createVNPayPayment, vnpayWebhook, sepayWebhook, checkEnrollmentStatus, checkUserProStatus } from './controllers/payment.js';
@@ -62,6 +62,7 @@ app.post('/auth/change-password', authenticateJWT, changePassword);
 app.post('/auth/role-change-request', authenticateJWT, requestRoleChange);
 app.get('/admin/role-change-requests', authenticateJWT, requireRole(['ADMIN']), getRoleChangeRequests);
 app.post('/admin/role-change-requests/:id/review', authenticateJWT, requireRole(['ADMIN']), reviewRoleChange);
+app.post('/admin/exams/import', authenticateJWT, requireRole(['ADMIN']), importExam);
 
 // Protected Course Routes
 app.get('/courses', getCourses);
@@ -71,11 +72,28 @@ app.post('/courses', authenticateJWT, requireRole(['TEACHER', 'ADMIN']), createC
 
 // Protected Exam Routes
 app.get('/exams', getExams);
+app.get('/exams/:id', getExamById);
 app.get('/exams/:id/questions', getExamQuestionsPublic);
 app.get('/exams/attempts', authenticateJWT, requireRole(['STUDENT']), getAttempts);
 app.get('/exams/attempts/:attemptId', authenticateJWT, requireRole(['STUDENT']), getAttemptById);
 app.post('/exams/:id/attempts', authenticateJWT, requireRole(['STUDENT']), startAttempt);
 app.post('/exams/:id/attempts/:attemptId/submit', authenticateJWT, requireRole(['STUDENT']), submitAttempt);
+
+// Upgraded Exam Simulation Endpoints
+app.post('/exam-attempts/start', authenticateJWT, requireRole(['STUDENT']), (req, res, next) => {
+  req.params.id = String(req.body.examId);
+  next();
+}, startAttempt);
+app.post('/exam-attempts/:attemptId/save-answer', authenticateJWT, requireRole(['STUDENT']), saveAnswer);
+app.post('/exam-attempts/:attemptId/submit', authenticateJWT, requireRole(['STUDENT']), submitAttempt);
+app.get('/exam-attempts/:attemptId/result', authenticateJWT, requireRole(['STUDENT']), getAttemptResult);
+app.post('/exam-attempts/:attemptId/violation', authenticateJWT, requireRole(['STUDENT']), recordViolation);
+app.post('/exam-attempts/:attemptId/violation-detail', authenticateJWT, requireRole(['STUDENT']), recordViolationDetail);
+app.post('/exam-attempts/:attemptId/events', authenticateJWT, requireRole(['STUDENT']), recordExamEvent);
+app.get('/exam-attempts/:attemptId/events', authenticateJWT, requireRole(['STUDENT']), getExamEvents);
+app.post('/exam-attempts/:attemptId/ai-coach', authenticateJWT, requireRole(['STUDENT']), generateAiCoach);
+app.post('/exams/:id/smart-retake', authenticateJWT, requireRole(['STUDENT']), createSmartRetake);
+app.get('/users/me/exam-history', authenticateJWT, requireRole(['STUDENT']), getExamHistory);
 
 // Protected Payment Routes
 app.post('/enrollments', authenticateJWT, requireRole(['STUDENT']), createVNPayPayment);
