@@ -89,6 +89,12 @@ export const api = {
     });
     return request(`/document-resources?${params.toString()}`);
   },
+  getDocumentComments: (documentId) => request(`/document-resources/${documentId}/comments`),
+  addDocumentComment: (documentId, content) => request(`/document-resources/${documentId}/comments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content }),
+  }),
 
   getExamById: (examId) => request(`/exams/${examId}`),
 

@@ -1320,3 +1320,170 @@
   0%, 80%, 100% { transform: scale(0); }
   40% { transform: scale(1.0); }
 }
+
+/* ---------- Discussion Board Styles ---------- */
+.exambank-discussion {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: white;
+  border-radius: 16px;
+  padding: 8px 0;
+}
+
+.exambank-discussion__form {
+  background: #faf9f6;
+  border: 1.5px solid #e8e2d6;
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.exambank-discussion__textarea {
+  width: 100%;
+  min-height: 80px;
+  padding: 12px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 10px;
+  font-size: 13.5px;
+  outline: none;
+  background: white;
+  color: #1a1a2e;
+  resize: vertical;
+  transition: border-color 0.2s;
+  font-family: inherit;
+}
+
+.exambank-discussion__textarea:focus {
+  border-color: #059669;
+}
+
+.exambank-discussion__btn-submit {
+  align-self: flex-end;
+  padding: 8px 20px;
+  background: #059669;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.exambank-discussion__btn-submit:hover {
+  background: #047857;
+}
+
+.exambank-discussion__guest-box {
+  background: #fffbeb;
+  border: 1.5px solid #fbbf24;
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-size: 13px;
+  color: #92400e;
+  text-align: center;
+  font-weight: 600;
+}
+
+.exambank-discussion__comments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 10px;
+}
+
+.exambank-discussion__comment-card {
+  border-bottom: 1.5px solid #f1f5f9;
+  padding-bottom: 14px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.exambank-discussion__comment-card:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.exambank-discussion__avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  border: 1.5px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.exambank-discussion__comment-body {
+  flex: 1;
+  text-align: left;
+}
+
+.exambank-discussion__comment-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.exambank-discussion__comment-author {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+.exambank-discussion__comment-role {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.exambank-discussion__comment-role--student {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.exambank-discussion__comment-role--teacher {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.exambank-discussion__comment-role--admin {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.exambank-discussion__comment-date {
+  font-size: 11.5px;
+  color: #94a3b8;
+  margin-left: auto;
+}
+
+.exambank-discussion__comment-text {
+  font-size: 13.5px;
+  color: #334155;
+  line-height: 1.5;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.exambank-discussion__empty {
+  text-align: center;
+  padding: 30px 20px;
+  font-size: 13.5px;
+  color: #94a3b8;
+  font-style: italic;
+}
+

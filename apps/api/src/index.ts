@@ -9,7 +9,7 @@ import { getCourses, getCourseById, createCourse, getCourseStats } from './contr
 import { getExams, getExamById, startAttempt, saveAnswer, submitAttempt, getAttempts, getExamQuestionsPublic, getAttemptById, getAttemptResult, getExamHistory, recordViolation, recordExamEvent, getExamEvents, recordViolationDetail, generateAiCoach, createSmartRetake, importExam } from './controllers/exam.js';
 import { streamAIChat, refreshRoadmap, generateAIQuestions } from './controllers/ai.js';
 import { chatbotConsult } from './controllers/chatbot.js';
-import { getDocumentResources } from './controllers/document.js';
+import { getDocumentResources, getDocumentComments, addDocumentComment } from './controllers/document.js';
 import { createVNPayPayment, vnpayWebhook, sepayWebhook, checkEnrollmentStatus, checkUserProStatus } from './controllers/payment.js';
 import { authenticateJWT, requireRole } from './middleware/auth.js';
 import { 
@@ -74,6 +74,8 @@ app.post('/courses', authenticateJWT, requireRole(['TEACHER', 'ADMIN']), createC
 
 // Document Resource Routes
 app.get('/document-resources', getDocumentResources);
+app.get('/document-resources/:id/comments', getDocumentComments);
+app.post('/document-resources/:id/comments', authenticateJWT, addDocumentComment);
 
 // Protected Exam Routes
 app.get('/exams', getExams);

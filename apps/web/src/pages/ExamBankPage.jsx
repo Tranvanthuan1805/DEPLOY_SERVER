@@ -86,12 +86,50 @@ export default function ExamBankPage({ currentUser, navigateTo }) {
   const [aiRecommendation, setAiRecommendation] = useState(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
 
-  const [modalTab, setModalTab] = useState('details'); // 'details' | 'chat'
+  const [modalTab, setModalTab] = useState('details'); // 'details' | 'chat' | 'discussion'
   const [chatHistory, setChatHistory] = useState([]);
   const [chatInput, setChatInput] = useState('');
   const [isChatTyping, setIsChatTyping] = useState(false);
 
-  // Reset chatbot modal state on preview document change
+  // Discussion board states
+  const [comments, setComments] = useState([]);
+  const [commentsLoading, setCommentsLoading] = useState(false);
+  const [newCommentText, setNewCommentText] = useState('');
+  const [commentError, setCommentError] = useState(null);
+
+  const fetchComments = async (docId) => {
+    setCommentsLoading(true);
+    try {
+      const res = await api.getDocumentComments(docId);
+      setComments(res);
+      setCommentError(null);
+    } catch (err) {
+      setCommentError(err.message || 'Không thể tải thảo luận.');
+    } finally {
+      setCommentsLoading(false);
+    }
+  };
+
+  const handlePostComment = async (e) => {
+    if (e) e.preventDefault();
+    if (!newCommentText.trim() || !previewDoc) return;
+
+    if (!currentUser) {
+      toast('Vui lòng đăng nhập để tham gia thảo luận!', 'error');
+      return;
+    }
+
+    try {
+      const newComment = await api.addDocumentComment(previewDoc.id, newCommentText);
+      setComments(prev => [newComment, ...prev]);
+      setNewCommentText('');
+      toast('Đã gửi câu hỏi/thảo luận thành công!', 'success');
+    } catch (err) {
+      toast(err.message || 'Không thể gửi thảo luận.', 'error');
+    }
+  };
+
+  // Reset chatbot modal state & load comments on preview document change
   useEffect(() => {
     if (previewDoc) {
       setModalTab('details');
@@ -101,6 +139,8 @@ export default function ExamBankPage({ currentUser, navigateTo }) {
           text: `Xin chào! Anh là Trợ lý Học tập AI của EduPath. Rất vui được đồng hành cùng em trong việc chinh phục tài liệu "${previewDoc.title}". Em muốn hỏi gì về cuốn tài liệu này nào?`
         }
       ]);
+      setNewCommentText('');
+      fetchComments(previewDoc.id);
     }
   }, [previewDoc]);
 
@@ -774,6 +814,13 @@ export default function ExamBankPage({ currentUser, navigateTo }) {
                 >
                   💬 Hỏi đáp AI (Chatbot)
                 </button>
+                <button
+                  type="button"
+                  className={`exambank-modal-tab ${modalTab === 'discussion' ? 'exambank-modal-tab--active' : ''}`}
+                  onClick={() => setModalTab('discussion')}
+                >
+                  👥 Thảo luận học viên
+                </button>
               </div>
 
               {modalTab === 'details' ? (
@@ -802,7 +849,7 @@ export default function ExamBankPage({ currentUser, navigateTo }) {
                     <strong>📌 Hướng dẫn sử dụng:</strong> Tài liệu học tập của em sẽ được mở và tải về trực tiếp từ tài khoản Google Drive chính thức của hệ thống. Vui lòng bấm vào nút dưới đây để chuyển hướng tới Drive.
                   </div>
                 </>
-              ) : (
+              ) : modalTab === 'chat' ? (
                 /* Chatbot Tab panel */
                 <div style={{ marginBottom: '24px' }}>
                   <div className="exambank-chat">
@@ -888,6 +935,80 @@ export default function ExamBankPage({ currentUser, navigateTo }) {
                       </button>
                     </form>
                   </div>
+                </div>
+              ) : (
+                /* Discussion Board Tab panel */
+                <div style={{ marginBottom: '24px' }} className="exambank-discussion">
+                  {/* Form to submit comment */}
+                  {currentUser ? (
+                    <form onSubmit={handlePostComment} className="exambank-discussion__form">
+                      <textarea
+                        className="exambank-discussion__textarea"
+                        placeholder="Đặt câu hỏi hoặc chia sẻ ý kiến của em về tài liệu này..."
+                        value={newCommentText}
+                        onChange={e => setNewCommentText(e.target.value)}
+                        required
+                      />
+                      <button type="submit" className="exambank-discussion__btn-submit">
+                        Gửi thảo luận
+                      </button>
+                    </form>
+                  ) : (
+                    <div className="exambank-discussion__guest-box">
+                      🔑 Vui lòng đăng nhập để tham gia thảo luận và hỏi đáp về tài liệu này.
+                    </div>
+                  )}
+
+                  {/* Comments list */}
+                  {commentsLoading ? (
+                    <div style={{ textAlign: 'center', padding: '30px 0' }}>
+                      <div className="exambank-chat__dots">
+                        <span></span><span></span><span></span>
+                      </div>
+                      <p style={{ fontSize: '13px', color: '#64748b', marginTop: '8px' }}>Đang tải thảo luận...</p>
+                    </div>
+                  ) : commentError ? (
+                    <p style={{ color: '#ef4444', textAlign: 'center', fontSize: '13.5px' }}>{commentError}</p>
+                  ) : comments.length === 0 ? (
+                    <div className="exambank-discussion__empty">
+                      💬 Chưa có thảo luận nào cho tài liệu này. Hãy là người đầu tiên đặt câu hỏi hoặc chia sẻ ý kiến của em!
+                    </div>
+                  ) : (
+                    <div className="exambank-discussion__comments-list">
+                      {comments.map(c => {
+                        const init = c.user.fullName ? c.user.fullName[0].toUpperCase() : '?';
+                        const dateStr = new Date(c.createdAt).toLocaleDateString('vi-VN', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric'
+                        });
+                        const roleClass = c.user.role === 'ADMIN' ? 'admin' : (c.user.role === 'TEACHER' ? 'teacher' : 'student');
+                        const roleLabel = c.user.role === 'ADMIN' ? 'Admin' : (c.user.role === 'TEACHER' ? 'Giáo viên' : 'Học sinh');
+                        
+                        return (
+                          <div key={c.id} className="exambank-discussion__comment-card">
+                            <div className="exambank-discussion__avatar">
+                              {c.user.avatarUrl ? (
+                                <img src={c.user.avatarUrl} alt={c.user.fullName} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                              ) : init}
+                            </div>
+                            <div className="exambank-discussion__comment-body">
+                              <div className="exambank-discussion__comment-header">
+                                <span className="exambank-discussion__comment-author">{c.user.fullName}</span>
+                                <span className={`exambank-discussion__comment-role exambank-discussion__comment-role--${roleClass}`}>
+                                  {roleLabel}
+                                </span>
+                                <span className="exambank-discussion__comment-date">{dateStr}</span>
+                              </div>
+                              <p className="exambank-discussion__comment-text">{c.content}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 
