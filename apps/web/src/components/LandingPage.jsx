@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { toast } from '../utils/toast';
 import { api } from '../api';
 import { HiArrowRight, HiCheck, HiStar, HiLightningBolt, HiMenuAlt3, HiX, HiTrendingUp, HiSparkles, HiLockClosed, HiClock, HiPlay } from 'react-icons/hi';
 import FooterSunMascot from './FooterSunMascot';
@@ -992,7 +993,7 @@ export default function LandingPage({
       setExamReviewing(false);
     } catch (err) {
       console.error("Lỗi khi tải câu hỏi đề thi:", err);
-      alert("Không thể tải câu hỏi của đề thi này. Vui lòng thử lại sau!");
+      toast("Không thể tải câu hỏi của đề thi này. Vui lòng thử lại sau!", 'error');
     } finally {
       setLoadingQuestions(false);
     }
@@ -1006,14 +1007,14 @@ export default function LandingPage({
       }, 1000);
     } else if (examTimeLeft === 0 && !examSubmitted && selectedExamSimulator && examMode === 'exam') {
       setExamSubmitted(true);
-      alert("Đã hết thời gian làm bài! Hệ thống tự động nộp bài thi thử của bạn.");
+      toast("Đã hết thời gian làm bài! Hệ thống tự động nộp bài.", 'warning');
     }
     return () => clearInterval(timer);
   }, [selectedExamSimulator, examMode, examSubmitted, examTimeLeft, examIsPaused]);
 
   const handleGenerateRoadmap = () => {
     if (!generatorWeakness.trim()) {
-      alert("Vui lòng nhập một số điểm yếu học tập chính của bạn (ví dụ: mất gốc hình không gian, ngữ pháp...) để AI phân tích!");
+      toast("Vui lòng nhập điểm yếu học tập để AI phân tích lộ trình phù hợp!", 'warning');
       return;
     }
     setGeneratorStatus('analyzing');
@@ -1064,7 +1065,7 @@ export default function LandingPage({
 
   const handleAddPostPublic = (newPost) => {
     if (!currentUser) {
-      alert("Vui lòng đăng nhập hoặc đăng ký tài khoản để đóng góp bài viết trên Diễn đàn!");
+      toast("Vui lòng đăng nhập để đóng góp bài viết trên Diễn đàn!", 'warning');
       onNavigateToAuth('login');
       return;
     }
@@ -1073,7 +1074,7 @@ export default function LandingPage({
 
   const handleLikePostPublic = (postId) => {
     if (!currentUser) {
-      alert("Vui lòng đăng nhập để bình chọn bài viết yêu thích!");
+      toast("Vui lòng đăng nhập để bình chọn bài viết yêu thích!", 'warning');
       onNavigateToAuth('login');
       return;
     }
@@ -1082,7 +1083,7 @@ export default function LandingPage({
 
   const handleAddCommentPublic = (postId, newComment) => {
     if (!currentUser) {
-      alert("Vui lòng đăng nhập để tham gia thảo luận!");
+      toast("Vui lòng đăng nhập để tham gia thảo luận!", 'warning');
       onNavigateToAuth('login');
       return;
     }
@@ -2678,7 +2679,7 @@ export default function LandingPage({
                     </div>
                     <span className="time-display">05:42 / {selectedLessonPlayer.lesson.duration}</span>
                     <select 
-                      onChange={(e) => alert(`Đã chuyển tốc độ phát sang ${e.target.value}`)}
+                      onChange={(e) => toast(`Tốc độ phát: ${e.target.value}x`, 'success')}
                       className="speed-select"
                     >
                       <option value="1">1.0x</option>
@@ -2779,7 +2780,7 @@ export default function LandingPage({
                           style={{ marginTop: '15px' }}
                           onClick={() => {
                             if (Object.keys(lessonQuizAnswers).length < getLessonQuizQuestions(selectedLessonPlayer.course.id).length) {
-                              alert("Vui lòng hoàn thành toàn bộ các câu hỏi trắc nghiệm trước khi nộp bài!");
+                              toast("Vui lòng hoàn thành tất cả câu hỏi trước khi nộp bài!", 'warning');
                               return;
                             }
                             setLessonQuizSubmitted(true);
@@ -2944,7 +2945,7 @@ export default function LandingPage({
                   className="lp-btn lp-btn--accent lp-btn--full" 
                   onClick={() => {
                     setPricingShowCheckout(false);
-                    alert(`Đăng ký giao dịch thành công! Đặc quyền ${selectedPackage === 'elite' ? 'Elite Mentor' : 'Premium Pro'} sẽ tự động đồng bộ khi bạn đăng ký hoặc đăng nhập tài khoản bằng email này.`);
+                    toast(`Đăng ký thành công! Đặc quyền ${selectedPackage === 'elite' ? 'Elite Mentor' : 'Premium Pro'} sẽ được kích hoạt sau khi xác nhận giao dịch.`, 'success');
                     onNavigateToAuth('signup');
                   }}
                   style={{ padding: '12px', fontSize: '13.5px', fontWeight: 'bold' }}

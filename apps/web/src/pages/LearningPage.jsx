@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { toast } from '../utils/toast';
 import VideoPlayer from '../components/courses/VideoPlayer';
 import ProgressSidebar from '../components/courses/ProgressSidebar';
 import CourseMaterials from '../components/courses/CourseMaterials';
@@ -253,7 +254,7 @@ export default function LearningPage({ courseId, lessonId, currentUser, onSelect
         </div>
 
         {/* ── MAIN LAYOUT GRID ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '3fr 1.2fr', gap: '24px', alignItems: 'start' }} className="cp-learn-grid">
+        <div className="cp-learn-grid">
           
           {/* CỘT TRÁI (Video Player / Locks & Tab details) */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -323,7 +324,7 @@ export default function LearningPage({ courseId, lessonId, currentUser, onSelect
                   {activeTab === 'materials' && (
                     <CourseMaterials 
                       materials={materials}
-                      onDownload={(mat) => alert(`Bắt đầu tải tài liệu học tập: ${mat.title}`)}
+                      onDownload={(mat) => toast(`Bắt đầu tải tài liệu: ${mat.title}`, 'success')}
                     />
                   )}
                   {activeTab === 'discussion' && (

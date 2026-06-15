@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { toast } from '../utils/toast';
 import ExamTimer from '../components/mock-exams/ExamTimer';
 import QuestionCard from '../components/mock-exams/QuestionCard';
 import QuestionNavigator from '../components/mock-exams/QuestionNavigator';
@@ -6,17 +7,20 @@ import ExamSubmitModal from '../components/mock-exams/ExamSubmitModal';
 import { mockExamService } from '../services/mockExamService';
 import { HiShieldCheck, HiOutlineExclamation, HiCalculator, HiClipboardCopy, HiPresentationChartLine, HiBookOpen, HiX } from 'react-icons/hi';
 
+// Dangerous identifiers that must never reach new Function
+const CALC_DANGEROUS = /constructor|prototype|__proto__|fetch|XMLHttpRequest|window\b|document\b|\beval\b|Function\b|import\b|require\b|process\b|global\b|\bthis\b|alert\b|confirm\b|prompt\b/i;
+
 // Scientific Calculator Expression Evaluator
 const evaluateExpression = (expr) => {
+  if (CALC_DANGEROUS.test(expr)) return 'Lỗi';
   try {
     let cleanExpr = expr
       .replace(/×/g, '*')
       .replace(/÷/g, '/')
       .replace(/π/g, 'Math.PI')
-      .replace(/e/g, 'Math.E')
       .replace(/\^/g, '**');
 
-    // Safe replace for functions
+    // Replace math functions before replacing bare 'e' to avoid clobbering 'Math.E' in function names
     cleanExpr = cleanExpr
       .replace(/sin\(/g, 'Math.sin(')
       .replace(/cos\(/g, 'Math.cos(')
@@ -24,13 +28,16 @@ const evaluateExpression = (expr) => {
       .replace(/ln\(/g, 'Math.log(')
       .replace(/log\(/g, 'Math.log10(')
       .replace(/sqrt\(/g, 'Math.sqrt(');
-    
-    // Evaluate safely
+
+    // Replace bare 'e' (not already part of Math.*) as Euler's number
+    cleanExpr = cleanExpr.replace(/(?<![a-zA-Z])e(?![a-zA-Z])/g, 'Math.E');
+
+    // eslint-disable-next-line no-new-func
     const result = new Function(`return (${cleanExpr})`)();
-    if (typeof result === 'number' && !isNaN(result)) {
+    if (typeof result === 'number' && !isNaN(result) && isFinite(result)) {
       return Number(result.toFixed(6)).toString();
     }
-    return 'Lỗi';
+    return result === Infinity || result === -Infinity ? String(result) : 'Lỗi';
   } catch (err) {
     return 'Lỗi';
   }
@@ -57,6 +64,7 @@ export default function MockExamTakingPage({ examId, currentUser, onFinished, na
   const [violationCount, setViolationCount] = useState(0);
   const [showViolationModal, setShowViolationModal] = useState(false);
   const [violationReason, setViolationReason] = useState('');
+  const [showTimeUpModal, setShowTimeUpModal] = useState(false);
   
   // Widget states
   const [showCalculator, setShowCalculator] = useState(false);
@@ -67,6 +75,12 @@ export default function MockExamTakingPage({ examId, currentUser, onFinished, na
 
   // Refs for tracking
   const blurHandlerRegistered = useRef(false);
+
+  // Refs to provide fresh values to stale-closure callbacks (violation/timer auto-submit)
+  const answersRef = useRef(answers);
+  const secondsRemainingRef = useRef(secondsRemaining);
+  useEffect(() => { answersRef.current = answers; }, [answers]);
+  useEffect(() => { secondsRemainingRef.current = secondsRemaining; }, [secondsRemaining]);
 
   // Initialize and load questions
   const loadExamWorkspace = async () => {
@@ -177,7 +191,7 @@ export default function MockExamTakingPage({ examId, currentUser, onFinished, na
         // Clear hooks immediately to prevent repeating alerts
         window.removeEventListener('blur', handleWindowBlur);
         document.removeEventListener('visibilitychange', handleVisibilityChange);
-        alert(`🚨 BẠN ĐÃ VI PHẠM NỘI QUY CHỐNG GIAN LẬN QUÁ 3 LẦN! Hệ thống tự động khóa và nộp bài thi của bạn.`);
+        toast('Bạn đã vi phạm nội quy chống gian lận quá 3 lần! Hệ thống tự động nộp bài.', 'error');
         handleFinalSubmit(true);
       } else {
         setViolationReason(reason);
@@ -224,6 +238,27 @@ export default function MockExamTakingPage({ examId, currentUser, onFinished, na
     return () => document.removeEventListener('fullscreenchange', onFsChange);
   }, [isPreExam]);
 
+  // Keyboard shortcuts: A/B/C/D to select options, Left/Right to navigate questions
+  useEffect(() => {
+    if (isPreExam || questions.length === 0) return;
+    const handleKeyDown = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      const key = e.key;
+      if (key === 'ArrowLeft' || key === 'ArrowUp') {
+        e.preventDefault();
+        setCurrentIdx(prev => Math.max(0, prev - 1));
+      } else if (key === 'ArrowRight' || key === 'ArrowDown') {
+        e.preventDefault();
+        setCurrentIdx(prev => Math.min(questions.length - 1, prev + 1));
+      } else if (['a', 'b', 'c', 'd', 'A', 'B', 'C', 'D'].includes(key)) {
+        const currentQuestion = questions[currentIdx];
+        if (currentQuestion) handleSelectOption(currentQuestion.id, key.toUpperCase());
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isPreExam, questions, currentIdx]);
+
   // Final submit flow
   const handleFinalSubmit = async (forceSubmit = false) => {
     setIsSubmitModalOpen(false);
@@ -234,7 +269,7 @@ export default function MockExamTakingPage({ examId, currentUser, onFinished, na
     document.removeEventListener('visibilitychange', handleVisibilityChange);
 
     if (!currentUser && !forceSubmit) {
-      alert('🔒 Bạn chưa đăng nhập. Vui lòng đăng nhập để nộp bài thi thử và nhận phân tích chi tiết từ AI!');
+      toast('Bạn chưa đăng nhập. Vui lòng đăng nhập để nộp bài và nhận phân tích từ AI!', 'warning');
       localStorage.setItem('redirect_post_auth', window.location.pathname);
       window.history.pushState({}, '', '/');
       window.dispatchEvent(new PopStateEvent('popstate'));
@@ -242,12 +277,12 @@ export default function MockExamTakingPage({ examId, currentUser, onFinished, na
     }
 
     try {
-      const durationSeconds = (exam.duration_minutes * 60) - secondsRemaining;
+      const durationSeconds = (exam.duration_minutes * 60) - secondsRemainingRef.current;
       const { score, attemptId: submittedId } = await mockExamService.submitMockExam(
         currentUser?.id || 101,
         examId,
         attemptId,
-        answers,
+        answersRef.current,
         durationSeconds
       );
 
@@ -265,13 +300,12 @@ export default function MockExamTakingPage({ examId, currentUser, onFinished, na
       onFinished(examId, submittedId);
     } catch (err) {
       console.error('Lỗi nộp bài thi:', err);
-      alert('Không thể nộp bài thi thử. Vui lòng kiểm tra lại kết nối mạng!');
+      toast('Không thể nộp bài thi thử. Vui lòng kiểm tra lại kết nối mạng!', 'error');
     }
   };
 
   const handleTimeUp = () => {
-    alert('⏱️ Hết giờ làm bài! Hệ thống tự động nộp bài thi của bạn.');
-    handleFinalSubmit(true);
+    setShowTimeUpModal(true);
   };
 
   // Calculator button click handler
@@ -427,8 +461,9 @@ export default function MockExamTakingPage({ examId, currentUser, onFinished, na
           </button>
 
           {secondsRemaining > 0 && (
-            <ExamTimer 
-              durationMinutes={exam.duration_minutes} 
+            <ExamTimer
+              durationMinutes={exam.duration_minutes}
+              initialSeconds={secondsRemaining}
               onTimeUp={handleTimeUp}
               onSecondsChange={handleSecondsChange}
             />
@@ -499,8 +534,8 @@ export default function MockExamTakingPage({ examId, currentUser, onFinished, na
                   <button key={btn} onClick={() => handleCalcClick(btn)} style={{ background: isNaN(btn) ? '#57606f' : '#7f8c8d', color: '#fff', border: 'none', padding: '10px 4px', fontSize: '13px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>{btn}</button>
                 ))}
                 {/* Row 4 */}
-                {['0', '.', 'e', '(', '='].map(btn => (
-                  <button key={btn} onClick={() => handleCalcClick(btn)} style={{ gridColumn: btn === '=' ? 'span 2' : 'span 1', background: btn === '=' ? '#00b894' : '#7f8c8d', color: '#fff', border: 'none', padding: '10px 4px', fontSize: '13px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>{btn}</button>
+                {['0', '.', 'e', ')', '='].map(btn => (
+                  <button key={btn} onClick={() => handleCalcClick(btn)} style={{ background: btn === '=' ? '#00b894' : '#7f8c8d', color: '#fff', border: 'none', padding: '10px 4px', fontSize: '13px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>{btn}</button>
                 ))}
               </div>
             </div>
@@ -581,6 +616,30 @@ export default function MockExamTakingPage({ examId, currentUser, onFinished, na
           onSubmitClick={() => setIsSubmitModalOpen(true)}
         />
       </div>
+
+      {/* ── TIME UP MODAL ── */}
+      {showTimeUpModal && (
+        <div className="checkout-overlay" style={{ zIndex: 12000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="checkout-modal animate-in" style={{ maxWidth: '420px', border: '3px solid var(--exams-orange)', boxShadow: '0 10px 40px rgba(243, 156, 18, 0.25)' }}>
+            <div style={{ textAlign: 'center', padding: '12px 0' }}>
+              <div style={{ fontSize: '52px' }}>⏱️</div>
+              <h3 style={{ fontSize: '18px', fontWeight: '950', color: 'var(--text-primary)', marginTop: '14px', letterSpacing: '-0.5px' }}>
+                HẾT THỜI GIAN LÀM BÀI
+              </h3>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '12px 0 24px 0', lineHeight: 1.5 }}>
+                Thời gian thi đã kết thúc. Bài làm của bạn sẽ được nộp ngay để chấm điểm và phân tích kết quả từ AI.
+              </p>
+              <button
+                className="btn-primary"
+                onClick={() => { setShowTimeUpModal(false); handleFinalSubmit(true); }}
+                style={{ width: '100%', padding: '13px', background: 'var(--exams-orange)', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px' }}
+              >
+                Nộp bài & Xem kết quả ⚡
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── SECURITY VIOLATION ALERT MODAL ── */}
       {showViolationModal && (

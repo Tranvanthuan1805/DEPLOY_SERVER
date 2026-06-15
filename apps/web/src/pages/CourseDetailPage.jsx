@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { toast } from '../utils/toast';
 import { HiStar, HiUserGroup, HiBookOpen, HiClock, HiCheck, HiChevronRight, HiAcademicCap } from 'react-icons/hi';
 import CurriculumAccordion from '../components/courses/CurriculumAccordion';
 import CourseReviews from '../components/courses/CourseReviews';
@@ -66,12 +67,12 @@ export default function CourseDetailPage({ courseId, currentUser, onNavigateToLe
     }
 
     if (action === 'cart') {
-      alert(`Đã thêm khóa học "${course.title}" vào giỏ hàng của bạn!`);
+      toast(`Đã thêm khóa học "${course.title}" vào giỏ hàng của bạn!`, 'success');
       return;
     }
 
     if (!currentUser) {
-      alert('Vui lòng đăng nhập hoặc đăng ký tài khoản để bắt đầu học tập!');
+      toast('Vui lòng đăng nhập hoặc đăng ký tài khoản để bắt đầu học tập!', 'warning');
       return;
     }
 
@@ -80,8 +81,7 @@ export default function CourseDetailPage({ courseId, currentUser, onNavigateToLe
       if (currentUser) {
         await enrollmentService.enrollCourse(currentUser.id, course.id, course.priceSale);
         setIsOwned(true);
-        
-        // Sync user state in App.jsx
+
         if (onUpdateUser) {
           const activeUnlocked = currentUser.unlockedCourses || [];
           onUpdateUser({
@@ -89,11 +89,11 @@ export default function CourseDetailPage({ courseId, currentUser, onNavigateToLe
             unlockedCourses: [...activeUnlocked, Number(course.id), course.id.toString()]
           });
         }
-        alert('Đăng ký khóa học thành công! Tất cả bài giảng đã được mở khóa.');
+        toast('Đăng ký khóa học thành công! Tất cả bài giảng đã được mở khóa.', 'success');
       }
     } catch (err) {
       console.error(err);
-      alert('Không thể đăng ký khóa học vào lúc này, vui lòng thử lại sau.');
+      toast('Không thể đăng ký khóa học vào lúc này, vui lòng thử lại sau.', 'error');
     }
   };
 
@@ -148,7 +148,8 @@ export default function CourseDetailPage({ courseId, currentUser, onNavigateToLe
         </div>
 
         {/* ── main content header ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div className="cp-detail-header">
+          <div className="cp-detail-header__accent" />
           <div style={{ display: 'flex', gap: '8px' }}>
             <span style={{ background: 'var(--emerald-light)', color: 'var(--emerald-primary)', fontSize: '11px', fontWeight: '800', padding: '4px 12px', borderRadius: '99px', border: '1px solid rgba(5, 150, 105, 0.1)' }}>
               Luyện thi THPTQG
@@ -158,90 +159,44 @@ export default function CourseDetailPage({ courseId, currentUser, onNavigateToLe
             </span>
           </div>
 
-          <h1 style={{ fontSize: '28px', fontWeight: '900', color: 'var(--stone-text-main)', margin: 0, lineHeight: '1.3' }}>
+          <h1 style={{ fontSize: '32px', fontWeight: '900', color: 'var(--stone-text-main)', margin: 0, lineHeight: '1.25', letterSpacing: '-0.5px' }}>
             {course.title}
           </h1>
 
-          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '13px', color: 'var(--stone-text-secondary)', fontWeight: '500' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <HiStar style={{ color: '#fbbf24', fontSize: '16px' }} />
-              <strong>{course.rating.toFixed(1)}</strong> ({reviews.length} đánh giá học sinh)
+          <p style={{ fontSize: '15px', color: 'var(--stone-text-secondary)', margin: '4px 0 8px 0', maxWidth: '800px', lineHeight: '1.6' }}>
+            Khóa học được biên soạn chuẩn cấu trúc của Bộ Giáo dục & Đào tạo, trang bị đầy đủ lý thuyết cốt lõi, bài tập trắc nghiệm và chẩn đoán năng lực tự động bằng Adaptive AI giúp nâng cao điểm số cấp tốc.
+          </p>
+
+          <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', fontSize: '13.5px', color: 'var(--stone-text-secondary)', fontWeight: '600', borderTop: '1px solid var(--border-warm)', paddingTop: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <HiStar style={{ color: '#fbbf24', fontSize: '18px' }} />
+              <strong style={{ color: 'var(--stone-text-main)', fontSize: '14.5px' }}>{course.rating.toFixed(1)}</strong> 
+              <span style={{ color: 'var(--stone-text-secondary)' }}>({reviews.length} đánh giá học sinh)</span>
             </div>
-            <span>•</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <HiUserGroup />
-              <strong>{course.studentCount.toLocaleString('vi-VN')}</strong> học sinh đang học
+            <span style={{ color: 'var(--border-warm)' }}>|</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <HiUserGroup style={{ fontSize: '16px', color: 'var(--stone-text-muted)' }} />
+              <strong>{course.studentCount.toLocaleString('vi-VN')}</strong> học viên đang theo học
             </div>
-            <span>•</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <HiBookOpen />
+            <span style={{ color: 'var(--border-warm)' }}>|</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <HiBookOpen style={{ fontSize: '16px', color: 'var(--stone-text-muted)' }} />
               <strong>{course.lessonCount}</strong> bài học
             </div>
-            <span>•</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <HiClock />
+            <span style={{ color: 'var(--border-warm)' }}>|</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <HiClock style={{ fontSize: '16px', color: 'var(--stone-text-muted)' }} />
               <strong>{course.durationHours} giờ</strong> thời lượng
             </div>
           </div>
         </div>
 
         {/* ── Bố cục 2 cột chính ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '32px', alignItems: 'start' }} className="cp-detail-grid">
+        <div className="cp-detail-grid">
           
           {/* CỘT TRÁI (Nội dung chính & Tabs) */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
             
-            {/* Video/Ảnh preview ở đầu */}
-            <div 
-              style={{ 
-                position: 'relative', 
-                borderRadius: 'var(--radius-lg)', 
-                overflow: 'hidden', 
-                height: '340px',
-                border: '1.5px solid var(--border-warm)',
-                boxShadow: 'var(--shadow-warm-sm)'
-              }}
-            >
-              <img
-                src={course.thumbnail || '/course_thumb_math.png'}
-                alt={course.title}
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              />
-              <div 
-                style={{ 
-                  position: 'absolute', 
-                  inset: 0, 
-                  background: 'rgba(0, 0, 0, 0.25)', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center' 
-                }}
-              >
-                <button 
-                  onClick={() => handleEnroll('preview')}
-                  style={{
-                    backgroundColor: 'var(--emerald-primary)',
-                    color: '#ffffff',
-                    padding: '14px 28px',
-                    borderRadius: '12px',
-                    border: 'none',
-                    fontWeight: '800',
-                    fontSize: '14px',
-                    cursor: 'pointer',
-                    boxShadow: '0 4px 14px rgba(5,150,105,0.4)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    transition: 'transform 0.2s'
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.05)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}
-                >
-                  ▶ HỌC THỬ MIỄN PHÍ BÀI 1
-                </button>
-              </div>
-            </div>
-
             {/* Hệ thống Tabs */}
             <div>
               <div className="detail-tabs-header">
@@ -262,7 +217,7 @@ export default function CourseDetailPage({ courseId, currentUser, onNavigateToLe
               </div>
 
               {/* Từng panel nội dung dựa trên Active Tab */}
-              <div style={{ background: '#ffffff', border: '1.5px solid var(--border-warm)', borderRadius: 'var(--radius-lg)', padding: '28px', boxShadow: 'var(--shadow-warm-sm)' }}>
+              <div className="cp-detail-panel">
                 {activeTab === 'overview' && (
                   <div>
                     <h3 style={{ fontSize: '16px', fontWeight: '800', marginBottom: '14px', color: 'var(--stone-text-main)' }}>
@@ -275,20 +230,20 @@ export default function CourseDetailPage({ courseId, currentUser, onNavigateToLe
                     <h3 style={{ fontSize: '16px', fontWeight: '800', marginBottom: '14px', color: 'var(--stone-text-main)' }}>
                       Em sẽ học được những gì:
                     </h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13.5px', color: 'var(--stone-text-secondary)' }} className="cp-detail-checklist">
-                      <div style={{ display: 'flex', gap: '8px' }}>
+                    <div className="cp-detail-checklist">
+                      <div className="cp-detail-checklist__item">
                         <HiCheck style={{ color: 'var(--emerald-primary)', fontSize: '18px', flexShrink: 0 }} />
                         <span>Nắm vững toàn bộ kiến thức trọng tâm bám sát cấu trúc của Bộ GD&ĐT.</span>
                       </div>
-                      <div style={{ display: 'flex', gap: '8px' }}>
+                      <div className="cp-detail-checklist__item">
                         <HiCheck style={{ color: 'var(--emerald-primary)', fontSize: '18px', flexShrink: 0 }} />
                         <span>Thành thạo phương pháp phân tích nhanh, loại trừ trắc nghiệm cực chuẩn.</span>
                       </div>
-                      <div style={{ display: 'flex', gap: '8px' }}>
+                      <div className="cp-detail-checklist__item">
                         <HiCheck style={{ color: 'var(--emerald-primary)', fontSize: '18px', flexShrink: 0 }} />
                         <span>Tránh những bẫy nhận biết và thông hiểu kinh điển hay gặp nhất.</span>
                       </div>
-                      <div style={{ display: 'flex', gap: '8px' }}>
+                      <div className="cp-detail-checklist__item">
                         <HiCheck style={{ color: 'var(--emerald-primary)', fontSize: '18px', flexShrink: 0 }} />
                         <span>Tiếp cận kho bài kiểm tra chẩn đoán năng lực bằng Adaptive AI.</span>
                       </div>

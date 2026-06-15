@@ -681,6 +681,23 @@ export default function App() {
   const [settingsNewPass, setSettingsNewPass] = useState('');
   const [settingsConfirmNewPass, setSettingsConfirmNewPass] = useState('');
 
+  // Toast notifications
+  const [toasts, setToasts] = useState([]);
+  const showToast = useRef(null);
+  showToast.current = (message, type = 'success') => {
+    const id = Date.now() + Math.random();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4200);
+  };
+  useEffect(() => {
+    const handler = (e) => showToast.current(e.detail.message, e.detail.type);
+    window.addEventListener('app:toast', handler);
+    return () => window.removeEventListener('app:toast', handler);
+  }, []);
+
+  // AI feedback modal
+  const [aiFeedbackModal, setAiFeedbackModal] = useState(null);
+
   // Sync settings states when current user changes or tab is settings
   const [resetToken, setResetToken] = useState(null);
 
@@ -869,9 +886,9 @@ export default function App() {
       setCurrentUser(updatedUser);
       
       addLog(`Người dùng "${currentUser.name}" đổi mật khẩu tài khoản thành công (UC-04)`, 'sys');
-      alert('Đổi mật khẩu thành công!');
+      showToast.current('Đổi mật khẩu thành công!', 'success');
     } catch (err) {
-      alert(err.message || 'Đổi mật khẩu thất bại!');
+      showToast.current(err.message || 'Đổi mật khẩu thất bại!', 'error');
     }
   };
 
@@ -880,39 +897,39 @@ export default function App() {
     const updatedList = usersList.map(u => u.email === updatedProfile.email ? updatedProfile : u);
     setUsersList(updatedList);
     addLog(`Người dùng "${updatedProfile.name}" cập nhật thông tin cá nhân thành công`, 'sys');
-    alert('Lưu thông tin cá nhân thành công!');
+    showToast.current('Lưu thông tin cá nhân thành công!', 'success');
   };
 
   const handleSettingsPasswordChange = async (oldPass, newPass, confirmPass) => {
     if (!oldPass || !newPass || !confirmPass) {
-      alert('Vui lòng nhập đầy đủ các trường đổi mật khẩu!');
+      showToast.current('Vui lòng nhập đầy đủ các trường đổi mật khẩu!', 'warning');
       return;
     }
     if (newPass.length < 6) {
-      alert('Mật khẩu mới phải từ 6 ký tự trở lên!');
+      showToast.current('Mật khẩu mới phải từ 6 ký tự trở lên!', 'warning');
       return;
     }
     if (newPass !== confirmPass) {
-      alert('Xác nhận mật khẩu mới không trùng khớp!');
+      showToast.current('Xác nhận mật khẩu mới không trùng khớp!', 'warning');
       return;
     }
 
     try {
       await api.changePassword(oldPass, newPass);
-      
+
       const updatedList = usersList.map(u => u.email === currentUser.email ? { ...u, password: newPass } : u);
       setUsersList(updatedList);
-      
+
       const updatedUser = { ...currentUser, password: newPass };
       setCurrentUser(updatedUser);
-      
+
       addLog(`Người dùng "${currentUser.name}" đổi mật khẩu thành công từ cài đặt cá nhân`, 'sys');
-      alert('Đổi mật khẩu thành công!');
+      showToast.current('Đổi mật khẩu thành công!', 'success');
       setSettingsOldPass('');
       setSettingsNewPass('');
       setSettingsConfirmNewPass('');
     } catch (err) {
-      alert(err.message || 'Đổi mật khẩu thất bại!');
+      showToast.current(err.message || 'Đổi mật khẩu thất bại!', 'error');
     }
   };
 
@@ -1148,6 +1165,7 @@ export default function App() {
               onClearNotifications={() => setNotifications(prev => prev.map(n => ({ ...n, read: true })))}
               onLogout={handleLogout}
               onChangePassword={handleChangePassword}
+              onNavigateSettings={() => { navigateTo('/'); setActiveTab('settings'); setActiveCourseDetails(null); setActiveTestSimulator(null); setActiveOCRScanner(null); }}
               addLog={addLog}
             />
           ) : (
@@ -1177,20 +1195,20 @@ export default function App() {
                         const password = e.target.password.value;
                         const confirm = e.target.confirm.value;
                         if (password.length < 6) {
-                          alert('Mật khẩu mới phải có tối thiểu 6 ký tự!');
+                          showToast.current('Mật khẩu mới phải có tối thiểu 6 ký tự!', 'warning');
                           return;
                         }
                         if (password !== confirm) {
-                          alert('Mật khẩu xác nhận không khớp! Vui lòng nhập lại.');
+                          showToast.current('Mật khẩu xác nhận không khớp! Vui lòng nhập lại.', 'warning');
                           return;
                         }
                         try {
                           await api.resetPassword(resetToken, password);
-                          alert('Đặt lại mật khẩu thành công! Em có thể đăng nhập bằng mật khẩu mới.');
+                          showToast.current('Đặt lại mật khẩu thành công! Hãy đăng nhập bằng mật khẩu mới.', 'success');
                           setResetToken(null);
                           setActiveTab('login');
                         } catch (err) {
-                          alert(err.message || 'Lỗi đặt lại mật khẩu.');
+                          showToast.current(err.message || 'Lỗi đặt lại mật khẩu.', 'error');
                         }
                       }}>
                         <div className="form-group" style={{ marginBottom: '16px' }}>
@@ -1600,7 +1618,7 @@ export default function App() {
                                         <button
                                           onClick={() => {
                                             const feedback = typeof att.aiFeedback === 'string' ? JSON.parse(att.aiFeedback) : att.aiFeedback;
-                                            alert(`🤖 [CHẨN ĐOÁN AI - Đề: ${att.exam?.title}]\n\n📝 Đánh giá chung: ${feedback.assessment || 'Chưa có đánh giá.'}\n\n⚠️ Lỗ hổng kiến thức: ${(feedback.knowledgeGaps || []).join(', ') || 'Không phát hiện lỗ hổng lớn.'}\n\n💡 Lời khuyên: \n${(feedback.advice || []).map(a => `- ${a}`).join('\n')}`);
+                                            setAiFeedbackModal({ feedback, exam: att.exam });
                                           }}
                                           style={{
                                             padding: '4px 10px',
@@ -2141,7 +2159,7 @@ export default function App() {
                                   const file = e.target.files[0];
                                   if (file) {
                                     if (file.size > 2 * 1024 * 1024) {
-                                      alert('Dung lượng ảnh tối đa là 2MB!');
+                                      showToast.current('Dung lượng ảnh tối đa là 2MB!', 'warning');
                                       return;
                                     }
                                     const reader = new FileReader();
@@ -2582,6 +2600,63 @@ export default function App() {
       {/* Public Chatbot AI floating button and chat dialog */}
       <ChatbotWidget />
 
+      {/* ── Toast Notifications ── */}
+      <div className="app-toasts-container">
+        {toasts.map(t => (
+          <div key={t.id} className={`app-toast app-toast-${t.type}`}>
+            <span className="app-toast-icon">
+              {t.type === 'success' ? '✅' : t.type === 'error' ? '❌' : '⚠️'}
+            </span>
+            <span>{t.message}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* ── AI Feedback Modal ── */}
+      {aiFeedbackModal && (
+        <div className="ai-feedback-modal-overlay" onClick={() => setAiFeedbackModal(null)}>
+          <div className="ai-feedback-modal" onClick={e => e.stopPropagation()}>
+            <h3>🤖 Chẩn đoán AI — {aiFeedbackModal.exam?.title || 'Đề tự luyện'}</h3>
+
+            <div className="ai-feedback-section">
+              <div className="ai-feedback-section-label">📝 Đánh giá chung</div>
+              <div className="ai-feedback-section-body">
+                {aiFeedbackModal.feedback.assessment || 'Chưa có đánh giá.'}
+              </div>
+            </div>
+
+            <div className="ai-feedback-section">
+              <div className="ai-feedback-section-label">⚠️ Lỗ hổng kiến thức</div>
+              <div className="ai-feedback-section-body">
+                {(aiFeedbackModal.feedback.knowledgeGaps || []).length > 0
+                  ? (aiFeedbackModal.feedback.knowledgeGaps).map((gap, i) => (
+                      <span key={i} className="ai-feedback-gap-tag">{gap}</span>
+                    ))
+                  : <span style={{ color: 'var(--accent-green)' }}>Không phát hiện lỗ hổng lớn ✓</span>
+                }
+              </div>
+            </div>
+
+            {(aiFeedbackModal.feedback.advice || []).length > 0 && (
+              <div className="ai-feedback-section">
+                <div className="ai-feedback-section-label">💡 Lời khuyên cải thiện</div>
+                <div className="ai-feedback-section-body" style={{ padding: '6px 14px' }}>
+                  {(aiFeedbackModal.feedback.advice).map((item, i) => (
+                    <div key={i} className="ai-feedback-advice-item">
+                      <span style={{ color: 'var(--primary)', fontWeight: 800 }}>→</span>
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <button className="ai-feedback-close-btn" onClick={() => setAiFeedbackModal(null)}>
+              Đã hiểu, đóng lại
+            </button>
+          </div>
+        </div>
+      )}
 
     </div>
   );

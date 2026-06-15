@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { HiStar, HiSparkles } from 'react-icons/hi';
 import CourseCard from '../components/courses/CourseCard';
 import CourseFilter from '../components/courses/CourseFilter';
 import useCourseFilters from '../hooks/useCourseFilters';
@@ -99,7 +100,10 @@ export default function CoursesPage({ currentUser, onSelectCourse, onCheckoutCou
         {/* ── HERO BANNER ── */}
         <div className="cp-hero">
           <div className="cp-hero__left">
-            <span className="cp-hero__eyebrow">Nền tảng học trực tuyến thích ứng AI hàng đầu</span>
+            <span className="cp-hero__eyebrow">
+              <HiSparkles style={{ marginRight: '6px', verticalAlign: 'middle', color: 'var(--emerald-primary)', fontSize: '14px' }} />
+              Nền tảng học trực tuyến thích ứng AI hàng đầu
+            </span>
             <h1 className="cp-hero__title">
               Khóa học luyện thi<br />
               <span className="cp-hero__title-accent">THPT Quốc Gia 2026</span>
@@ -132,7 +136,11 @@ export default function CoursesPage({ currentUser, onSelectCourse, onCheckoutCou
               />
               {/* Floating trust badge */}
               <div className="cp-hero__trust-badge">
-                <span className="cp-hero__trust-stars">★★★★★</span>
+                <div style={{ display: 'flex', gap: '2px', color: '#F59E0B', marginBottom: '3px' }}>
+                  {Array.from({ length: 5 }).map((_, idx) => (
+                    <HiStar key={idx} style={{ fontSize: '15px' }} />
+                  ))}
+                </div>
                 <div>
                   <strong>4.95/5 Điểm Đánh giá</strong>
                   <span>từ 15,200+ học viên ôn thi</span>

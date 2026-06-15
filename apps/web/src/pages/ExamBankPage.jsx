@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { toast } from '../utils/toast';
 import {
   HiSearch, HiDownload, HiEye, HiX,
   HiAcademicCap, HiDocumentText, HiClock,
@@ -218,7 +219,7 @@ export default function ExamBankPage({ currentUser, navigateTo }) {
 
   const handleDownload = (exam) => {
     const filename = `De_thi_${exam.subjectName.replace(/\s/g, '_')}_${exam.year}_THPTQG.pdf`;
-    alert(`📥 Đang tải xuống: ${filename}\n\n(Đây là bản demo — file thực tế sẽ được cung cấp khi hệ thống tích hợp kho tài liệu)`);
+    toast(`Đang tải xuống: ${filename}`, 'success');
   };
 
   const isGuest = !currentUser;
