@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { toast } from '../utils/toast';
 import { HiTerminal, HiUsers, HiClipboardCheck, HiGlobeAlt, HiAdjustments, HiTrendingUp } from 'react-icons/hi';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { api } from '../api';
 
 const financeData = [
   { name: 'Tháng 1', revenue: 15.4 },
@@ -36,11 +37,48 @@ export default function AdminDashboard({
   
   // Announcement states
   const [annText, setAnnText] = useState('');
+
+  // Moderation Reports states
+  const [reports, setReports] = useState([]);
+  const [loadingReports, setLoadingReports] = useState(false);
   
   // AI Config states
   const [aiWeightDifficulty, setAiWeightDifficulty] = useState(70);
   const [aiWeightWeakness, setAiWeightWeakness] = useState(85);
   const [aiWeightRoadmap, setAiWeightRoadmap] = useState(90);
+
+  useEffect(() => {
+    if (currentTab === 'moderation') {
+      fetchReports();
+    }
+  }, [currentTab]);
+
+  const fetchReports = async () => {
+    setLoadingReports(true);
+    try {
+      const data = await api.getForumReports();
+      setReports(data || []);
+    } catch (err) {
+      console.error('Lỗi tải báo cáo kiểm duyệt:', err);
+    } finally {
+      setLoadingReports(false);
+    }
+  };
+
+  const handleResolveReport = async (reportId, action) => {
+    const status = action === 'approve' ? 'RESOLVED' : 'DISMISSED';
+    const notes = action === 'approve' 
+      ? 'Quản trị viên phê duyệt báo cáo, nội dung vi phạm bị xử lý.' 
+      : 'Quản trị viên từ chối báo cáo vi phạm.';
+    
+    try {
+      await api.resolveForumReport(reportId, status, notes);
+      toast('Đã xử lý báo cáo thành công!', 'success');
+      fetchReports();
+    } catch (err) {
+      toast(err.message || 'Lỗi xử lý báo cáo!', 'error');
+    }
+  };
 
   const handleSendAnnouncement = (e) => {
     e.preventDefault();
@@ -102,6 +140,13 @@ export default function AdminDashboard({
           style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}
         >
           <HiAdjustments /> Cấu hình hệ thống AI
+        </button>
+        <button
+          className={`demo-role-btn ${currentTab === 'moderation' ? 'active' : ''}`}
+          onClick={() => handleTabChange('moderation')}
+          style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}
+        >
+          🛡️ Kiểm duyệt báo cáo
         </button>
       </div>
 
@@ -363,6 +408,82 @@ export default function AdminDashboard({
           <button className="btn-primary" onClick={handleUpdateAIWeights}>
             Lưu cấu hình tham số AI
           </button>
+        </div>
+      )}
+
+      {currentTab === 'moderation' && (
+        <div className="card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h3 style={{ fontSize: '15px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 6 }}>
+              🛡️ KIỂM DUYỆT BÁO CÁO NỘI DUNG VI PHẠM
+            </h3>
+            <button className="btn-outline" onClick={fetchReports} style={{ padding: '6px 14px', fontSize: '11.5px' }}>Tải lại</button>
+          </div>
+          
+          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
+            Dưới đây là danh sách các báo cáo từ học viên gửi về các bài viết hoặc bình luận vi phạm quy chuẩn cộng đồng.
+          </p>
+
+          {loadingReports ? (
+            <div style={{ textAlign: 'center', padding: '30px' }}>Đang tải báo cáo vi phạm...</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {reports.length > 0 ? (
+                reports.map(rep => (
+                  <div key={rep.id} style={{ padding: '16px', border: '1px solid var(--border)', borderRadius: '8px', background: 'var(--bg-main)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-primary)' }}>
+                        Báo cáo #{rep.id} bởi: <strong style={{ color: 'var(--primary)' }}>{rep.reporter?.fullName}</strong>
+                      </span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Gửi lúc: {new Date(rep.createdAt).toLocaleString()}</span>
+                    </div>
+
+                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '4px 0' }}>
+                      <strong>Lý do tố cáo: </strong>
+                      <span style={{ color: 'var(--accent-red)', fontWeight: 'bold' }}>{rep.reason}</span>
+                    </div>
+
+                    {rep.post && (
+                      <div style={{ padding: '8px 12px', background: 'var(--bg-card)', borderLeft: '3px solid var(--primary)', borderRadius: '4px', fontSize: '12.5px', marginBottom: '4px' }}>
+                        <strong>Bài viết bị tố cáo:</strong> "{rep.post.title}" (ID: {rep.post.id})
+                      </div>
+                    )}
+
+                    {rep.comment && (
+                      <div style={{ padding: '8px 12px', background: 'var(--bg-card)', borderLeft: '3px solid var(--accent-blue)', borderRadius: '4px', fontSize: '12.5px', marginBottom: '4px' }}>
+                        <strong>Bình luận bị tố cáo:</strong> "{rep.comment.content}" (ID: {rep.comment.id})
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                      <button
+                        className="btn-primary"
+                        style={{ padding: '6px 14px', fontSize: '11.5px', background: 'var(--accent-red)', border: 'none' }}
+                        onClick={() => {
+                          if (window.confirm('Bạn có chắc chắn muốn xử lý nội dung bị tố cáo này? (Bài viết/Bình luận liên quan sẽ bị ẩn)')) {
+                            handleResolveReport(rep.id, 'approve');
+                          }
+                        }}
+                      >
+                        ✓ Duyệt & Ẩn nội dung vi phạm
+                      </button>
+                      <button
+                        className="btn-outline"
+                        style={{ padding: '6px 14px', fontSize: '11.5px' }}
+                        onClick={() => handleResolveReport(rep.id, 'reject')}
+                      >
+                        ✕ Bác bỏ báo cáo
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div style={{ textAlign: 'center', padding: '30px', border: '1px dashed var(--border)', borderRadius: '8px', color: 'var(--text-secondary)' }}>
+                  🎉 Không có báo cáo vi phạm nào chưa xử lý!
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

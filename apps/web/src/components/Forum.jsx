@@ -12,6 +12,8 @@ export default function Forum({ currentUser }) {
   // Global View Controls
   const [activeTab, setActiveTab] = useState('feed'); // feed, groups, drive, leaderboard
   const [selectedPost, setSelectedPost] = useState(null);
+  const [selectedGroup, setSelectedGroup] = useState(null);
+  const [groupTab, setGroupTab] = useState('announcements'); // announcements, discussion, chat, members
   
   // API State data
   const [posts, setPosts] = useState([]);
@@ -20,6 +22,9 @@ export default function Forum({ currentUser }) {
   const [studyGroups, setStudyGroups] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
   const [gamifyProfile, setGamifyProfile] = useState(null);
+  const [groupAnnouncements, setGroupAnnouncements] = useState([]);
+  const [groupPosts, setGroupPosts] = useState([]);
+  const [groupChatMessages, setGroupChatMessages] = useState([]);
   
   // Loading & Filtering controls
   const [loading, setLoading] = useState(false);
@@ -27,6 +32,7 @@ export default function Forum({ currentUser }) {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedTag, setSelectedTag] = useState('');
   const [selectedType, setSelectedType] = useState('All'); // All, GENERAL, QA, RESOURCE
+  const [sortType, setSortType] = useState('newest');
 
   // Modals & Inputs
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -43,6 +49,11 @@ export default function Forum({ currentUser }) {
   const [newDifficulty, setNewDifficulty] = useState('MEDIUM');
   const [newTagsString, setNewTagsString] = useState('');
   
+  // Group Announcement form states
+  const [newAnnTitle, setNewAnnTitle] = useState('');
+  const [newAnnContent, setNewAnnContent] = useState('');
+  const [chatInput, setChatInput] = useState('');
+
   // Resource file attachment states
   const [resourceFile, setResourceFile] = useState(null); // { fileUrl, fileType, fileSize }
 
@@ -79,6 +90,17 @@ export default function Forum({ currentUser }) {
       });
     });
 
+    socketRef.current.on('receive_message', (msg) => {
+      setGroupChatMessages(prev => {
+        if (prev.some(m => m.id === msg.id)) return prev;
+        const mappedMsg = {
+          ...msg,
+          authorName: msg.role === 'ADMIN' ? 'Quản trị viên' : (msg.role === 'TEACHER' ? 'Giáo viên' : 'Học sinh')
+        };
+        return [...prev, mappedMsg];
+      });
+    });
+
     // Fetch initial categories
     fetchCategories();
 
@@ -99,7 +121,7 @@ export default function Forum({ currentUser }) {
       fetchLeaderboard();
     }
     fetchGamifyProfile();
-  }, [activeTab, selectedCategory, selectedType, selectedTag]);
+  }, [activeTab, selectedCategory, selectedType, selectedTag, sortType]);
 
   // Monitor room join / leave on post selection
   useEffect(() => {
@@ -113,6 +135,25 @@ export default function Forum({ currentUser }) {
       }
     }
   }, [selectedPost]);
+
+  // Monitor room join / leave on group selection
+  useEffect(() => {
+    if (socketRef.current && selectedGroup) {
+      const room = `group_${selectedGroup.id}`;
+      socketRef.current.emit('join_room', room);
+      fetchGroupAnnouncements(selectedGroup.id);
+      fetchGroupPosts(selectedGroup.id);
+      setGroupChatMessages([
+        {
+          id: 'welcome',
+          roomId: room,
+          role: 'SYSTEM',
+          content: `Chào mừng bạn đến với kênh trò chuyện của nhóm "${selectedGroup.name}". Hãy thảo luận lịch học và ôn thi tại đây!`,
+          createdAt: new Date().toISOString()
+        }
+      ]);
+    }
+  }, [selectedGroup]);
 
   // =========================================================================
   // API CLIENT CALLS
@@ -137,7 +178,8 @@ export default function Forum({ currentUser }) {
         categoryId: selectedCategory === 'All' ? '' : selectedCategory,
         postType: selectedType === 'All' ? '' : selectedType,
         tag: selectedTag,
-        search: searchQuery
+        search: searchQuery,
+        sort: sortType === 'newest' ? '' : sortType
       };
       const data = await api.getForumPosts(params);
       setPosts(data || []);
@@ -145,6 +187,100 @@ export default function Forum({ currentUser }) {
       console.error('Lỗi tải bài viết:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchGroupAnnouncements = async (groupId) => {
+    try {
+      const data = await api.getGroupAnnouncements(groupId);
+      setGroupAnnouncements(data || []);
+    } catch (err) {
+      console.error('Lỗi tải thông báo nhóm:', err);
+    }
+  };
+
+  const fetchGroupPosts = async (groupId) => {
+    try {
+      const data = await api.getForumPosts({ studyGroupId: groupId });
+      setGroupPosts(data || []);
+    } catch (err) {
+      console.error('Lỗi tải bài viết nhóm:', err);
+    }
+  };
+
+  const handleCreateGroupAnnouncement = async (e) => {
+    e.preventDefault();
+    if (!newAnnTitle.trim() || !newAnnContent.trim()) return;
+    try {
+      await api.createGroupAnnouncement(selectedGroup.id, newAnnTitle, newAnnContent);
+      setNewAnnTitle('');
+      setNewAnnContent('');
+      fetchGroupAnnouncements(selectedGroup.id);
+      toast('Đăng thông báo nhóm thành công!', 'success');
+    } catch (err) {
+      toast(err.message || 'Lỗi đăng thông báo nhóm!', 'error');
+    }
+  };
+
+  const handleCreateGroupPost = async (e) => {
+    e.preventDefault();
+    if (!newTitle.trim() || !newContent.trim()) return;
+    try {
+      const postPayload = {
+        title: newTitle,
+        content: newContent,
+        categoryId: Number(newCategoryId),
+        postType: newPostType,
+        difficulty: newPostType === 'QA' ? newDifficulty : undefined,
+        tags: newTagsString.split(',').map(t => t.trim()).filter(t => t.length > 0),
+        studyGroupId: selectedGroup.id
+      };
+      await api.createForumPost(postPayload);
+      setNewTitle('');
+      setNewContent('');
+      setNewTagsString('');
+      fetchGroupPosts(selectedGroup.id);
+      toast('Đăng bài thảo luận vào nhóm thành công!', 'success');
+    } catch (err) {
+      toast(err.message || 'Lỗi đăng bài viết nhóm!', 'error');
+    }
+  };
+
+  const handleSendChatMessage = (e) => {
+    e.preventDefault();
+    if (!chatInput.trim()) return;
+    if (socketRef.current && selectedGroup) {
+      const room = `group_${selectedGroup.id}`;
+      socketRef.current.emit('send_message', {
+        roomId: room,
+        studentId: currentUser.id,
+        role: currentUser.role,
+        content: chatInput
+      });
+      // Append locally for immediate feedback
+      const localMsg = {
+        id: Date.now(),
+        roomId: room,
+        studentId: currentUser.id,
+        role: currentUser.role,
+        content: chatInput,
+        authorName: currentUser.fullName || currentUser.name || 'Học sinh',
+        createdAt: new Date().toISOString()
+      };
+      setGroupChatMessages(prev => [...prev, localMsg]);
+      setChatInput('');
+    }
+  };
+
+  const handleLeaveGroup = async (groupId) => {
+    if (!window.confirm('Bạn có chắc chắn muốn rời nhóm học tập này?')) return;
+    try {
+      await api.leaveStudyGroup(groupId);
+      setSelectedGroup(null);
+      fetchStudyGroups();
+      toast('Đã rời khỏi nhóm học tập!', 'success');
+    } catch (err) {
+      toast(err.message || 'Không thể rời nhóm!', 'error');
     }
   };
 
@@ -389,7 +525,7 @@ export default function Forum({ currentUser }) {
             </button>
           )}
           {activeTab === 'groups' && (
-            <button className="btn-primary" onClick={() => setShowGroupModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <button id="forum-btn-create-group" className="btn-primary" onClick={() => setShowGroupModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <HiPlus /> Tạo nhóm học tập
             </button>
           )}
@@ -410,6 +546,7 @@ export default function Forum({ currentUser }) {
             ].map(tab => (
               <button
                 key={tab.id}
+                id={`forum-tab-${tab.id}`}
                 onClick={() => {
                   setActiveTab(tab.id);
                   setSelectedPost(null);
@@ -640,7 +777,7 @@ export default function Forum({ currentUser }) {
                       className="form-control"
                       value={selectedCategory}
                       onChange={e => setSelectedCategory(e.target.value)}
-                      style={{ minWidth: '150px' }}
+                      style={{ minWidth: '130px' }}
                     >
                       <option value="All">Tất cả môn học</option>
                       {categories.map(cat => (
@@ -652,12 +789,23 @@ export default function Forum({ currentUser }) {
                       className="form-control"
                       value={selectedType}
                       onChange={e => setSelectedType(e.target.value)}
-                      style={{ minWidth: '150px' }}
+                      style={{ minWidth: '130px' }}
                     >
                       <option value="All">Loại chủ đề</option>
                       <option value="GENERAL">Thảo luận chung</option>
                       <option value="QA">Hỏi & Đáp (Q&A)</option>
                       <option value="RESOURCE">Học liệu & Đề thi</option>
+                    </select>
+
+                    <select 
+                      className="form-control"
+                      value={sortType}
+                      onChange={e => setSortType(e.target.value)}
+                      style={{ minWidth: '130px' }}
+                    >
+                      <option value="newest">Mới nhất</option>
+                      <option value="views">Xem nhiều nhất</option>
+                      <option value="pinned">Đã ghim lên đầu</option>
                     </select>
 
                     {(searchQuery || selectedCategory !== 'All' || selectedType !== 'All' || selectedTag) && (
@@ -668,12 +816,37 @@ export default function Forum({ currentUser }) {
                           setSelectedCategory('All');
                           setSelectedType('All');
                           setSelectedTag('');
+                          setSortType('newest');
                         }}
                         style={{ padding: '8px 16px' }}
                       >
                         Đặt lại
                       </button>
                     )}
+                  </div>
+
+                  {/* Popular Tags List */}
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '20px', alignItems: 'center' }}>
+                    <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-secondary)' }}>🏷️ Tags phổ biến:</span>
+                    {['casio', 'daoham', 'toan12', 'tienganh', 'dao-dong', 'este', 'menh-de'].map(t => (
+                      <button
+                        key={t}
+                        onClick={() => setSelectedTag(selectedTag === t ? '' : t)}
+                        className="badge-pill"
+                        style={{
+                          border: '1px solid var(--border)',
+                          background: selectedTag === t ? 'var(--primary)' : 'var(--bg-card)',
+                          color: selectedTag === t ? '#fff' : 'var(--text-secondary)',
+                          cursor: 'pointer',
+                          padding: '4px 12px',
+                          borderRadius: '16px',
+                          fontSize: '12px',
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        #{t}
+                      </button>
+                    ))}
                   </div>
 
                   {/* Feed listings */}
@@ -747,7 +920,267 @@ export default function Forum({ currentUser }) {
                 </div>
               )}
 
-              {activeTab === 'groups' && (
+              {activeTab === 'groups' && selectedGroup ? (
+                /* GROUP WORKSPACE DETAIL VIEW */
+                <div className="card detailed-post-card animate-in" style={{ padding: '24px', background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+                  {/* Header info */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: '16px', marginBottom: '20px' }}>
+                    <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+                      <button className="btn-outline" onClick={() => setSelectedGroup(null)} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px' }}>
+                        <HiArrowLeft /> Danh sách nhóm
+                      </button>
+                      <div>
+                        <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: 0 }}>👥 {selectedGroup.name}</h2>
+                        <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>{selectedGroup.description}</p>
+                      </div>
+                    </div>
+                    
+                    <button 
+                      className="btn-outline" 
+                      onClick={() => handleLeaveGroup(selectedGroup.id)}
+                      style={{ color: 'var(--accent-red)', borderColor: 'var(--accent-red)', background: 'none', padding: '6px 14px' }}
+                    >
+                      Rời nhóm
+                    </button>
+                  </div>
+
+                  {/* Tabs menu */}
+                  <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '20px', gap: '8px' }}>
+                    {[
+                      { id: 'announcements', label: 'Bảng tin thông báo' },
+                      { id: 'discussion', label: 'Thảo luận nội bộ' },
+                      { id: 'chat', label: 'Hộp chat trực tuyến ⚡' },
+                      { id: 'members', label: 'Thành viên (' + (selectedGroup.members?.length || 0) + ')' }
+                    ].map(tab => (
+                      <button
+                        key={tab.id}
+                        id={`group-tab-${tab.id}`}
+                        onClick={() => setGroupTab(tab.id)}
+                        style={{
+                          padding: '10px 16px',
+                          border: 'none',
+                          borderBottom: groupTab === tab.id ? '2px solid var(--primary)' : '2px solid transparent',
+                          background: 'none',
+                          color: groupTab === tab.id ? 'var(--primary)' : 'var(--text-secondary)',
+                          cursor: 'pointer',
+                          fontWeight: '600',
+                          fontSize: '13px',
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Tab Announcement contents */}
+                  {groupTab === 'announcements' && (
+                    <div>
+                      {/* Only creators/admin can announce */}
+                      {(selectedGroup.creatorId === currentUser?.id || currentUser?.role === 'ADMIN' || currentUser?.role === 'TEACHER') && (
+                        <form onSubmit={handleCreateGroupAnnouncement} className="card" style={{ padding: '16px', background: 'var(--bg-main)', border: '1px solid var(--border)', marginBottom: '20px' }}>
+                          <h4 style={{ fontSize: '13.5px', fontWeight: 'bold', marginBottom: '10px' }}>📢 Phát hành thông báo nhóm mới</h4>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                            <input 
+                              type="text" 
+                              className="form-control" 
+                              placeholder="Tiêu đề thông báo..." 
+                              value={newAnnTitle}
+                              onChange={e => setNewAnnTitle(e.target.value)}
+                              required
+                            />
+                            <textarea 
+                              className="form-control" 
+                              placeholder="Nội dung thông báo chi tiết..." 
+                              value={newAnnContent}
+                              onChange={e => setNewAnnContent(e.target.value)}
+                              style={{ minHeight: '80px' }}
+                              required
+                            />
+                            <button type="submit" className="btn-primary" style={{ alignSelf: 'flex-end', padding: '6px 16px' }}>
+                              Phát thông báo
+                            </button>
+                          </div>
+                        </form>
+                      )}
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {groupAnnouncements.length > 0 ? (
+                          groupAnnouncements.map(ann => (
+                            <div key={ann.id} className="card" style={{ padding: '16px', border: '1px solid var(--border)' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                  <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--primary)', color: '#fff', fontSize: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                                    {ann.author?.fullName?.slice(0, 2).toUpperCase() || 'TR'}
+                                  </div>
+                                  <span style={{ fontSize: '12.5px', fontWeight: 'bold' }}>{ann.author?.fullName}</span>
+                                </div>
+                                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{new Date(ann.createdAt).toLocaleString()}</span>
+                              </div>
+                              <h5 style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '6px', color: 'var(--text-main)' }}>{ann.title}</h5>
+                              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0, whiteSpace: 'pre-line' }}>{ann.content}</p>
+                            </div>
+                          ))
+                        ) : (
+                          <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                            Không có thông báo nhóm nào.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Tab Discussion content */}
+                  {groupTab === 'discussion' && (
+                    <div>
+                      {/* Simple group create post form */}
+                      <form onSubmit={handleCreateGroupPost} className="card" style={{ padding: '16px', background: 'var(--bg-main)', border: '1px solid var(--border)', marginBottom: '20px' }}>
+                        <h4 style={{ fontSize: '13.5px', fontWeight: 'bold', marginBottom: '10px' }}>✍️ Tạo bài thảo luận nội bộ</h4>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          <select className="form-control" value={newCategoryId} onChange={e => setNewCategoryId(e.target.value)}>
+                            {categories.map(cat => (
+                              <option key={cat.id} value={cat.id}>{cat.name}</option>
+                            ))}
+                          </select>
+                          <input 
+                            type="text" 
+                            className="form-control" 
+                            placeholder="Tiêu đề thảo luận..." 
+                            value={newTitle}
+                            onChange={e => setNewTitle(e.target.value)}
+                            required
+                          />
+                          <textarea 
+                            className="form-control" 
+                            placeholder="Nội dung thảo luận..." 
+                            value={newContent}
+                            onChange={e => setNewContent(e.target.value)}
+                            style={{ minHeight: '80px' }}
+                            required
+                          />
+                          <button type="submit" className="btn-primary" style={{ alignSelf: 'flex-end', padding: '6px 16px' }}>
+                            Đăng thảo luận
+                          </button>
+                        </div>
+                      </form>
+
+                      {/* Display internal group posts */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {groupPosts.length > 0 ? (
+                          groupPosts.map(post => (
+                            <div 
+                              key={post.id} 
+                              className="card post-card" 
+                              style={{ padding: '16px', cursor: 'pointer', border: '1px solid var(--border)' }}
+                              onClick={() => setSelectedPost(post)}
+                            >
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                <span className="badge-pill" style={{ background: 'var(--primary-bg)', color: 'var(--primary)', fontSize: '10px' }}>{post.category?.name}</span>
+                                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{new Date(post.createdAt).toLocaleDateString()}</span>
+                              </div>
+                              <h4 style={{ fontWeight: 'bold', fontSize: '14.5px', marginBottom: '6px' }}>{post.title}</h4>
+                              <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', margin: '0 0 10px 0', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{post.content}</p>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', color: 'var(--text-muted)' }}>
+                                <span>Tác giả: {post.author?.fullName}</span>
+                                <span>💬 {post.comments?.length || 0} bình luận</span>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                            Chưa có chủ đề thảo luận nội bộ nào. Hãy khởi xướng chủ đề đầu tiên!
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Tab Chat room */}
+                  {groupTab === 'chat' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', height: '400px', border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
+                      {/* Messages list */}
+                      <div style={{ flex: 1, padding: '16px', overflowY: 'auto', background: 'var(--bg-main)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        {groupChatMessages.map((msg, i) => {
+                          const isSystem = msg.role === 'SYSTEM';
+                          const isMe = msg.studentId === currentUser?.id;
+
+                          if (isSystem) {
+                            return (
+                              <div key={msg.id || i} style={{ alignSelf: 'center', background: 'var(--border)', color: 'var(--text-secondary)', padding: '4px 12px', borderRadius: '12px', fontSize: '11.5px', textAlign: 'center', maxWidth: '80%' }}>
+                                {msg.content}
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div key={msg.id || i} style={{ alignSelf: isMe ? 'flex-end' : 'flex-start', display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start', maxWidth: '70%' }}>
+                              <span style={{ fontSize: '10.5px', color: 'var(--text-secondary)', marginBottom: '2px', fontWeight: 'bold' }}>
+                                {isMe ? 'Tôi' : (msg.authorName || 'Học viên')}
+                              </span>
+                              <div style={{
+                                padding: '10px 14px',
+                                borderRadius: '12px',
+                                background: isMe ? 'var(--primary)' : 'var(--bg-card)',
+                                color: isMe ? '#fff' : 'var(--text-primary)',
+                                border: isMe ? 'none' : '1px solid var(--border)',
+                                fontSize: '13px',
+                                wordBreak: 'break-word'
+                              }}>
+                                {msg.content}
+                              </div>
+                              <span style={{ fontSize: '9px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Chat input form */}
+                      <form onSubmit={handleSendChatMessage} style={{ display: 'flex', borderTop: '1px solid var(--border)', background: 'var(--bg-card)' }}>
+                        <input 
+                          type="text" 
+                          className="form-control" 
+                          placeholder="Nhập nội dung tin nhắn và ấn Enter..." 
+                          value={chatInput}
+                          onChange={e => setChatInput(e.target.value)}
+                          style={{ flex: 1, border: 'none', borderRadius: 0, padding: '14px', outline: 'none', background: 'none' }}
+                        />
+                        <button type="submit" className="btn-primary" style={{ borderRadius: 0, border: 'none', padding: '0 24px' }}>Gửi</button>
+                      </form>
+                    </div>
+                  )}
+
+                  {/* Tab Members */}
+                  {groupTab === 'members' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <h4 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '6px' }}>Danh sách thành viên nhóm:</h4>
+                      {selectedGroup.members?.map(m => (
+                        <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-main)' }}>
+                          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: m.role === 'CREATOR' ? 'var(--primary)' : 'var(--accent-blue)', color: '#fff', fontSize: '11px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
+                              {m.user?.fullName?.slice(0, 2).toUpperCase() || 'HV'}
+                            </div>
+                            <div>
+                              <span style={{ fontSize: '13.5px', fontWeight: 'bold' }}>{m.user?.fullName}</span>
+                              <span style={{ fontSize: '10px', color: 'var(--text-muted)', marginLeft: '8px' }}>Tham gia: {new Date(m.joinedAt).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                          
+                          <span className="badge-pill" style={{
+                            background: m.role === 'CREATOR' ? 'rgba(108,92,231,0.12)' : 'rgba(9,132,227,0.12)',
+                            color: m.role === 'CREATOR' ? 'var(--primary)' : 'var(--accent-blue)',
+                            fontSize: '11px', fontWeight: 'bold'
+                          }}>
+                            {m.role === 'CREATOR' ? 'Trưởng nhóm' : 'Thành viên'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : activeTab === 'groups' ? (
+                /* REGULAR LIST OF GROUPS */
                 <div>
                   {loading ? (
                     <div style={{ textAlign: 'center', padding: '40px' }}><HiRefresh className="animate-spin" style={{ fontSize: '24px' }} /> Đang tải...</div>
@@ -760,7 +1193,16 @@ export default function Forum({ currentUser }) {
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: '10px' }}>
                             <span>Thành viên: {group.memberCount}</span>
                             {group.isMember ? (
-                              <span style={{ color: 'var(--accent-green)', fontWeight: 'bold' }}>✓ Đã tham gia</span>
+                              <div style={{ display: 'flex', gap: '6px' }}>
+                                <span style={{ color: 'var(--accent-green)', fontWeight: 'bold', display: 'flex', alignItems: 'center' }}>✓</span>
+                                <button 
+                                  className="btn-primary" 
+                                  onClick={() => setSelectedGroup(group)} 
+                                  style={{ padding: '4px 10px', fontSize: '11px', background: 'var(--primary)' }}
+                                >
+                                  Vào nhóm
+                                </button>
+                              </div>
                             ) : (
                               <button className="btn-primary" onClick={() => handleJoinStudyGroup(group.id)} style={{ padding: '4px 10px', fontSize: '11px' }}>
                                 Tham gia
@@ -772,7 +1214,7 @@ export default function Forum({ currentUser }) {
                     </div>
                   )}
                 </div>
-              )}
+              ) : null}
 
               {activeTab === 'drive' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -1054,6 +1496,7 @@ export default function Forum({ currentUser }) {
               <div className="form-group">
                 <label style={{ fontSize: '12.5px', marginBottom: '6px', display: 'block' }}>Lý do báo cáo:</label>
                 <textarea 
+                  id="report-reason-input"
                   className="form-control" 
                   placeholder="Vui lòng cung cấp lý do chi tiết (Spam, ngôn từ kích động, xúc phạm giáo viên/học sinh...)" 
                   value={reportReason} 
@@ -1064,8 +1507,8 @@ export default function Forum({ currentUser }) {
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
-                <button type="button" className="btn-outline" onClick={() => setShowReportModal(false)}>Hủy</button>
-                <button type="submit" className="btn-primary">Gửi báo cáo</button>
+                <button id="report-cancel-btn" type="button" className="btn-outline" onClick={() => setShowReportModal(false)}>Hủy</button>
+                <button id="report-submit-btn" type="submit" className="btn-primary">Gửi báo cáo</button>
               </div>
             </form>
           </div>

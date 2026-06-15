@@ -2553,14 +2553,7 @@ export default function App() {
           {/* ================= TEACHER WORKSPACE ================= */}
           {role === 'teacher' && activeTab !== 'landing' && (
             activeTab === 'forum' ? (
-              <Forum
-                forumPosts={forumPosts}
-                onAddPost={handleForumAddPost}
-                onLikePost={handleForumLikePost}
-                onAddComment={handleForumAddComment}
-                onAcceptCommentSolution={handleForumAcceptCommentSolution}
-                currentUser={currentUser}
-              />
+              <Forum currentUser={currentUser} />
             ) : (
               <TeacherDashboard
                 courses={courses}
@@ -2578,14 +2571,7 @@ export default function App() {
           {/* ================= ADMIN WORKSPACE ================= */}
           {role === 'admin' && activeTab !== 'landing' && (
             activeTab === 'forum' ? (
-              <Forum
-                forumPosts={forumPosts}
-                onAddPost={handleForumAddPost}
-                onLikePost={handleForumLikePost}
-                onAddComment={handleForumAddComment}
-                onAcceptCommentSolution={handleForumAcceptCommentSolution}
-                currentUser={currentUser}
-              />
+              <Forum currentUser={currentUser} />
             ) : (
               <AdminDashboard
                 users={usersList}

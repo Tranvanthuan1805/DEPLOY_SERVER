@@ -163,6 +163,18 @@ export const api = {
     request(`/forum/resources/${id}/download`, { method: 'POST' }),
 
   createForumReport: (postId, commentId, reason) =>
-    request('/forum/moderation/reports', { method: 'POST', body: { postId, commentId, reason } })
+    request('/forum/moderation/reports', { method: 'POST', body: { postId, commentId, reason } }),
+
+  getGroupAnnouncements: (groupId) =>
+    request(`/forum/study-groups/${groupId}/announcements`, { method: 'GET' }),
+
+  createGroupAnnouncement: (groupId, title, content) =>
+    request(`/forum/study-groups/${groupId}/announcements`, { method: 'POST', body: { title, content } }),
+
+  getForumReports: () =>
+    request('/forum/moderation/reports', { method: 'GET' }),
+
+  resolveForumReport: (id, status, notes) =>
+    request(`/forum/moderation/reports/${id}/resolve`, { method: 'PUT', body: { status, notes } })
 };
 

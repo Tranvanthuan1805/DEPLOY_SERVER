@@ -131,9 +131,9 @@ async function checkAndAwardBadges(userId: number) {
 
       if (!userHasBadge) {
         let qualifies = false;
-        if (badgeInfo.code === 'FIRST_POST' && postsCount >= badgeInfo.req.posts) qualifies = true;
-        if (badgeInfo.code === 'GURU' && solutionsCount >= badgeInfo.req.solutions) qualifies = true;
-        if (badgeInfo.code === 'POPULAR' && xpCount >= badgeInfo.req.xp) qualifies = true;
+        if (badgeInfo.code === 'FIRST_POST' && badgeInfo.req.posts && postsCount >= badgeInfo.req.posts) qualifies = true;
+        if (badgeInfo.code === 'GURU' && badgeInfo.req.solutions && solutionsCount >= badgeInfo.req.solutions) qualifies = true;
+        if (badgeInfo.code === 'POPULAR' && badgeInfo.req.xp && xpCount >= badgeInfo.req.xp) qualifies = true;
 
         if (qualifies) {
           await prisma.userBadge.create({
@@ -585,7 +585,7 @@ export async function acceptCommentSolution(req: AuthRequest, res: Response) {
 
     // Validate permission: only author of post OR a teacher can accept solutions
     const isAuthor = comment.post.authorId === userId;
-    const isTeacher = req.user.role === 'TEACHER' || req.user.role === 'ADMIN';
+    const isTeacher = req.user?.role === 'TEACHER' || req.user?.role === 'ADMIN';
 
     if (!isAuthor && !isTeacher) {
       return res.status(403).json({ success: false, error: 'Không có quyền chọn lời giải hay cho câu hỏi này!' });
@@ -894,3 +894,84 @@ export async function resolveReport(req: AuthRequest, res: Response) {
     return res.status(500).json({ success: false, error: err.message });
   }
 }
+
+export async function getGroupAnnouncements(req: AuthRequest, res: Response) {
+  const { id } = req.params;
+  const userId = req.user?.id;
+
+  try {
+    const group = await prisma.studyGroup.findUnique({
+      where: { id: Number(id) }
+    });
+
+    if (!group) {
+      return res.status(404).json({ success: false, error: 'Không tìm thấy nhóm học tập!' });
+    }
+
+    if (group.isPrivate) {
+      const isMember = await prisma.studyGroupMember.findFirst({
+        where: { groupId: Number(id), userId }
+      });
+      if (!isMember && req.user?.role !== 'ADMIN') {
+        return res.status(403).json({ success: false, error: 'Bạn không có quyền truy cập nhóm riêng tư này!' });
+      }
+    }
+
+    const list = await prisma.groupAnnouncement.findMany({
+      where: { groupId: Number(id) },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        author: { select: { fullName: true, avatarUrl: true } }
+      }
+    });
+
+    return res.status(200).json({ success: true, data: list });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+export async function createGroupAnnouncement(req: AuthRequest, res: Response) {
+  const { id } = req.params;
+  const { title, content } = req.body;
+  const userId = req.user?.id;
+
+  if (!userId) return res.status(401).json({ success: false, error: 'Chưa xác thực!' });
+
+  try {
+    const group = await prisma.studyGroup.findUnique({
+      where: { id: Number(id) }
+    });
+
+    if (!group) {
+      return res.status(404).json({ success: false, error: 'Không tìm thấy nhóm học tập!' });
+    }
+
+    const member = await prisma.studyGroupMember.findFirst({
+      where: { groupId: Number(id), userId }
+    });
+
+    const hasPermission = member?.role === 'CREATOR' || member?.role === 'ADMIN' || req.user?.role === 'ADMIN';
+
+    if (!hasPermission) {
+      return res.status(403).json({ success: false, error: 'Chỉ quản trị viên hoặc trưởng nhóm mới được tạo thông báo!' });
+    }
+
+    const ann = await prisma.groupAnnouncement.create({
+      data: {
+        groupId: Number(id),
+        title,
+        content,
+        authorId: userId
+      },
+      include: {
+        author: { select: { fullName: true, avatarUrl: true } }
+      }
+    });
+
+    return res.status(201).json({ success: true, data: ann });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+}
+

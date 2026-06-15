@@ -11,7 +11,7 @@ import {
   changePassword, requestRoleChange, getRoleChangeRequests, reviewRoleChange
 } from './controllers/auth.js';
 import { getCourses, getCourseById, createCourse, getCourseStats } from './controllers/course.js';
-import { getExams, startAttempt, submitAttempt } from './controllers/exam.js';
+import { getExams, startAttempt, submitAttempt, getAttempts, getAttemptById } from './controllers/exam.js';
 import { streamAIChat, refreshRoadmap, generateAIQuestions } from './controllers/ai.js';
 import { chatbotConsult } from './controllers/chatbot.js';
 import { createVNPayPayment, vnpayWebhook, sepayWebhook, checkEnrollmentStatus, checkUserProStatus } from './controllers/payment.js';
@@ -21,6 +21,7 @@ import {
   getPosts, getPostById, createPost, deletePost, togglePinPost, reactPost,
   getComments, createComment, acceptCommentSolution,
   getStudyGroups, createStudyGroup, joinStudyGroup, leaveStudyGroup,
+  getGroupAnnouncements, createGroupAnnouncement,
   getLeaderboard, getUserGamificationProfile,
   downloadResource, createReport, getReports, resolveReport
 } from './controllers/forum.js';
@@ -76,6 +77,8 @@ app.post('/courses', authenticateJWT, requireRole(['TEACHER', 'ADMIN']), createC
 
 // Protected Exam Routes
 app.get('/exams', getExams);
+app.get('/exams/attempts', authenticateJWT, requireRole(['STUDENT']), getAttempts);
+app.get('/exams/attempts/:attemptId', authenticateJWT, requireRole(['STUDENT']), getAttemptById);
 app.post('/exams/:id/attempts', authenticateJWT, requireRole(['STUDENT']), startAttempt);
 app.post('/exams/:id/attempts/:attemptId/submit', authenticateJWT, requireRole(['STUDENT']), submitAttempt);
 
@@ -122,6 +125,8 @@ app.get('/forum/study-groups', authenticateJWT, getStudyGroups);
 app.post('/forum/study-groups', authenticateJWT, createStudyGroup);
 app.post('/forum/study-groups/:id/join', authenticateJWT, joinStudyGroup);
 app.post('/forum/study-groups/:id/leave', authenticateJWT, leaveStudyGroup);
+app.get('/forum/study-groups/:id/announcements', authenticateJWT, getGroupAnnouncements);
+app.post('/forum/study-groups/:id/announcements', authenticateJWT, createGroupAnnouncement);
 
 app.get('/forum/leaderboard', getLeaderboard);
 app.get('/forum/gamification/profile', authenticateJWT, getUserGamificationProfile);
