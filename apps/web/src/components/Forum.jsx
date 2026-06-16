@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { toast } from '../utils/toast';
 import {
   HiChat, HiHeart, HiSearch, HiPlus, HiArrowLeft, HiUser, HiTag,
@@ -10,7 +11,14 @@ import { api, API_BASE } from '../api';
 
 function stripImages(text) {
   if (!text) return '';
-  return text.replace(/!\[(.*?)\]\((.*?)\)/g, '[Hình ảnh]');
+  return text.replace(/!\[(.*?)\]\((.*?)\)/g, '').trim();
+}
+
+function getFirstImageUrl(text) {
+  if (!text) return null;
+  const regex = /!\[(.*?)\]\((.*?)\)/;
+  const match = regex.exec(text);
+  return match ? match[2] : null;
 }
 
 function renderTextWithImages(text) {
@@ -690,9 +698,7 @@ export default function Forum({ currentUser }) {
           <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '20px', gap: '8px' }}>
             {[
               { id: 'feed', label: 'Bài thảo luận', icon: <HiChat /> },
-              { id: 'groups', label: 'Nhóm học tập', icon: <HiUserGroup /> },
-              { id: 'drive', label: 'Thư viện tài liệu', icon: <HiDownload /> },
-              { id: 'leaderboard', label: 'Bảng xếp hạng', icon: <HiTrendingUp /> }
+              { id: 'groups', label: 'Nhóm học tập', icon: <HiUserGroup /> }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -995,17 +1001,7 @@ export default function Forum({ currentUser }) {
                       <button
                         key={t}
                         onClick={() => setSelectedTag(selectedTag === t ? '' : t)}
-                        className="badge-pill"
-                        style={{
-                          border: '1px solid var(--border)',
-                          background: selectedTag === t ? 'var(--primary)' : 'var(--bg-card)',
-                          color: selectedTag === t ? '#fff' : 'var(--text-secondary)',
-                          cursor: 'pointer',
-                          padding: '4px 12px',
-                          borderRadius: '16px',
-                          fontSize: '12px',
-                          transition: 'all 0.2s'
-                        }}
+                        className={`forum-tag-pill ${selectedTag === t ? 'active' : ''}`}
                       >
                         #{t}
                       </button>
@@ -1021,15 +1017,10 @@ export default function Forum({ currentUser }) {
                         posts.map(post => (
                           <div 
                             key={post.id} 
-                            className="card post-card" 
-                            style={{ 
-                              cursor: 'pointer', padding: '16px', background: 'var(--bg-card)', 
-                              border: post.isPinned ? '1.5px solid var(--primary)' : '1px solid var(--border)',
-                              transition: 'transform 0.2s', hover: { transform: 'translateY(-2px)' }
-                            }}
+                            className={`forum-post-card ${post.isPinned ? 'pinned' : ''}`} 
                             onClick={() => setSelectedPost(post)}
                           >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
                               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                 <span className="badge-pill" style={{ background: 'var(--primary-bg)', color: 'var(--primary)', fontSize: '11px', fontWeight: 'bold' }}>
                                   {post.category?.name}
@@ -1053,10 +1044,23 @@ export default function Forum({ currentUser }) {
                               </span>
                             </div>
 
-                            <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '8px' }}>{post.title}</h3>
-                            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', margin: '0 0 12px 0' }}>
-                              {stripImages(post.content)}
-                            </p>
+                            <h3 style={{ fontSize: '16.5px', fontWeight: 'bold', margin: '0 0 2px 0', color: 'var(--text-main)' }}>{post.title}</h3>
+                            
+                            {getFirstImageUrl(post.content) && (
+                              <div className="forum-post-preview-image">
+                                <img 
+                                  src={getFirstImageUrl(post.content)} 
+                                  alt="Preview" 
+                                  loading="lazy"
+                                />
+                              </div>
+                            )}
+
+                            {stripImages(post.content) && (
+                              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', margin: '0 0 4px 0', lineHeight: 1.5 }}>
+                                {stripImages(post.content)}
+                              </p>
+                            )}
 
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border)', paddingTop: '10px', fontSize: '12px', color: 'var(--text-secondary)' }}>
                               <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -1247,17 +1251,30 @@ export default function Forum({ currentUser }) {
                           groupPosts.map(post => (
                             <div 
                               key={post.id} 
-                              className="card post-card" 
-                              style={{ padding: '16px', cursor: 'pointer', border: '1px solid var(--border)' }}
+                              className="forum-post-card" 
                               onClick={() => setSelectedPost(post)}
                             >
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
                                 <span className="badge-pill" style={{ background: 'var(--primary-bg)', color: 'var(--primary)', fontSize: '10px' }}>{post.category?.name}</span>
                                 <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{new Date(post.createdAt).toLocaleDateString()}</span>
                               </div>
-                              <h4 style={{ fontWeight: 'bold', fontSize: '14.5px', marginBottom: '6px' }}>{post.title}</h4>
-                              <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', margin: '0 0 10px 0', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{stripImages(post.content)}</p>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', color: 'var(--text-muted)' }}>
+                              <h4 style={{ fontWeight: 'bold', fontSize: '15.5px', margin: '0 0 2px 0', color: 'var(--text-main)' }}>{post.title}</h4>
+                              
+                              {getFirstImageUrl(post.content) && (
+                                <div className="forum-post-preview-image">
+                                  <img 
+                                    src={getFirstImageUrl(post.content)} 
+                                    alt="Preview" 
+                                    loading="lazy"
+                                  />
+                                </div>
+                              )}
+
+                              {stripImages(post.content) && (
+                                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', margin: '0 0 4px 0', lineHeight: 1.5 }}>{stripImages(post.content)}</p>
+                              )}
+
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border)', paddingTop: '10px', fontSize: '12px', color: 'var(--text-secondary)' }}>
                                 <span>Tác giả: {post.author?.fullName}</span>
                                 <span>💬 {post.comments?.length || 0} bình luận</span>
                               </div>
@@ -1393,76 +1410,6 @@ export default function Forum({ currentUser }) {
                 </div>
               ) : null}
 
-              {activeTab === 'drive' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {/* Reuse resource filters */}
-                  <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', marginBottom: '10px' }}>
-                    {categories.map(cat => (
-                      <button 
-                        key={cat.id} 
-                        onClick={() => setSelectedCategory(cat.id)}
-                        className={`badge-pill ${selectedCategory === cat.id ? 'active' : ''}`}
-                        style={{
-                          border: '1px solid var(--border)',
-                          background: selectedCategory === cat.id ? 'var(--primary)' : 'var(--bg-main)',
-                          color: selectedCategory === cat.id ? '#fff' : 'var(--text-secondary)',
-                          padding: '6px 12px', fontSize: '12px', borderRadius: '16px', cursor: 'pointer', whiteSpace: 'nowrap'
-                        }}
-                      >
-                        {cat.name}
-                      </button>
-                    ))}
-                  </div>
-
-                  {posts.filter(p => p.postType === 'RESOURCE').map(post => (
-                    <div key={post.id} className="card" style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-                      <div>
-                        <span className="badge-pill" style={{ background: 'var(--primary-bg)', color: 'var(--primary)', fontSize: '10px' }}>{post.category?.name}</span>
-                        <h4 style={{ fontWeight: 'bold', fontSize: '14.5px', marginTop: '6px', margin: '4px 0' }}>📘 {post.title}</h4>
-                        <p style={{ fontSize: '11px', color: 'var(--text-secondary)', margin: 0 }}>Đóng góp bởi {post.author?.fullName}</p>
-                      </div>
-                      <button 
-                        className="btn-primary" 
-                        onClick={() => post.resource && handleDownloadFile(post.resource.id, post.resource.fileUrl)}
-                        style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', fontSize: '12px' }}
-                      >
-                        <HiDownload /> Tải ngay
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {activeTab === 'leaderboard' && (
-                <div className="card" style={{ padding: '20px', background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    🏆 Bảng xếp hạng thi đua tuần này
-                  </h3>
-                  
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {leaderboard.map(u => (
-                      <div key={u.userId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
-                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                          <span style={{ fontWeight: 'bold', width: '20px', color: u.rank <= 3 ? 'var(--primary)' : 'var(--text-secondary)' }}>
-                            #{u.rank}
-                          </span>
-                          <div style={{ background: 'var(--accent-blue)', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 'bold' }}>
-                            {u.name?.slice(0,2).toUpperCase()}
-                          </div>
-                          <div>
-                            <span style={{ fontSize: '13.5px', fontWeight: 'bold' }}>{u.name}</span>
-                            {u.role === 'TEACHER' && <span className="badge-pill" style={{ background: 'var(--primary-bg)', color: 'var(--primary)', fontSize: '9px', marginLeft: '6px' }}>Giáo viên</span>}
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', gap: '16px', fontSize: '13px', fontWeight: 'bold' }}>
-                          <span>Cấp độ {u.level}</span>
-                          <span style={{ color: 'var(--primary)' }}>{u.xp} XP</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -1541,9 +1488,9 @@ export default function Forum({ currentUser }) {
       {/* ================= MODALS ================= */}
 
       {/* Create New Post Modal */}
-      {showCreateModal && (
+      {showCreateModal && createPortal(
         <div className="modal-backdrop" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 999 }}>
-          <div className="modal-card card" style={{ maxWidth: '600px', width: '90%', padding: '24px', background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+          <div className="modal-card card" style={{ maxWidth: '600px', width: '90%', maxHeight: '90vh', overflowY: 'auto', padding: '24px', background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h3 style={{ fontSize: '17px', fontWeight: 'bold' }}>Tạo bài viết thảo luận mới</h3>
               <button onClick={() => setShowCreateModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', color: 'var(--text-muted)' }}>✕</button>
@@ -1639,13 +1586,14 @@ export default function Forum({ currentUser }) {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Create New Group Modal */}
-      {showGroupModal && (
+      {showGroupModal && createPortal(
         <div className="modal-backdrop" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 999 }}>
-          <div className="modal-card card" style={{ maxWidth: '500px', width: '90%', padding: '24px', background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+          <div className="modal-card card" style={{ maxWidth: '500px', width: '90%', maxHeight: '90vh', overflowY: 'auto', padding: '24px', background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h3 style={{ fontSize: '17px', fontWeight: 'bold' }}>Tạo nhóm học tập mới</h3>
               <button onClick={() => setShowGroupModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', color: 'var(--text-muted)' }}>✕</button>
@@ -1675,11 +1623,12 @@ export default function Forum({ currentUser }) {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Safety Report Modal */}
-      {showReportModal && (
+      {showReportModal && createPortal(
         <div className="modal-backdrop" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 999 }}>
           <div className="modal-card card" style={{ maxWidth: '400px', width: '90%', padding: '24px', background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
@@ -1707,7 +1656,8 @@ export default function Forum({ currentUser }) {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

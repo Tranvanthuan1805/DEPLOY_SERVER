@@ -730,6 +730,9 @@ export default function LandingPage({
     } else if (currentPath?.startsWith('/mock-exams')) {
       setActiveLandingView('exams');
       setSelectedCourseId(null);
+    } else if (currentPath === '/forum' || currentPath === '/community' || currentPath === '/direct') {
+      setActiveLandingView('forum');
+      setSelectedCourseId(null);
     } else if (currentPath) {
       const match = currentPath.match(/^\/courses\/(\d+)$/);
       if (match) {
@@ -1265,7 +1268,7 @@ export default function LandingPage({
             <a href="/ai-tutor" className={currentPath === '/ai-tutor' ? 'lp-link--active' : ''} onClick={(e) => { e.preventDefault(); if (navigateTo) { navigateTo('/ai-tutor'); } else { setActiveLandingView('ai-tutor'); } }}>Mindmap</a>
             <a href="/exam-bank" className={currentPath === '/exam-bank' ? 'lp-link--active' : ''} onClick={(e) => { e.preventDefault(); if (navigateTo) { navigateTo('/exam-bank'); } }}>Ngân hàng tài liệu</a>
             <a href="#leaderboard" className={activeLandingView === 'leaderboard' ? 'lp-link--active' : ''} onClick={(e) => { e.preventDefault(); setActiveLandingView('home'); setTimeout(() => { const el = document.getElementById('leaderboard'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100); }}>Bảng xếp hạng</a>
-            <a href="#forum" className={activeLandingView === 'forum' ? 'lp-link--active' : ''} onClick={(e) => { e.preventDefault(); setActiveLandingView('forum'); }}>Cộng đồng</a>
+            <a href="/forum" className={activeLandingView === 'forum' ? 'lp-link--active' : ''} onClick={(e) => { e.preventDefault(); if (navigateTo) { navigateTo('/forum'); } else { setActiveLandingView('forum'); } }}>Cộng đồng</a>
           </div>
 
           <div className="lp-nav__cta">
@@ -1617,7 +1620,7 @@ export default function LandingPage({
             <a href="/ai-tutor" onClick={(e) => { e.preventDefault(); if (navigateTo) { navigateTo('/ai-tutor'); } else { setActiveLandingView('ai-tutor'); } setMobileMenuOpen(false); }}>Mindmap</a>
             <a href="/exam-bank" onClick={(e) => { e.preventDefault(); if (navigateTo) { navigateTo('/exam-bank'); } setMobileMenuOpen(false); }}>Ngân hàng tài liệu</a>
             <a href="#leaderboard" onClick={(e) => { e.preventDefault(); setActiveLandingView('home'); setMobileMenuOpen(false); setTimeout(() => { const el = document.getElementById('leaderboard'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100); }}>Bảng xếp hạng</a>
-            <a href="#forum" onClick={(e) => { e.preventDefault(); setActiveLandingView('forum'); setMobileMenuOpen(false); }}>Cộng đồng</a>
+            <a href="/forum" onClick={(e) => { e.preventDefault(); if (navigateTo) { navigateTo('/forum'); } else { setActiveLandingView('forum'); } setMobileMenuOpen(false); }}>Cộng đồng</a>
             
             {currentUser ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
@@ -2596,7 +2599,7 @@ export default function LandingPage({
 
         {/* ================= 6. FORUM DEDICATED PAGE ================= */}
         {activeLandingView === 'forum' && (
-          <div className="lp-container" style={{ padding: '40px 28px 80px' }}>
+          <div style={{ maxWidth: '95%', margin: '0 auto', padding: '40px 28px 80px' }}>
             <button 
               onClick={() => setActiveLandingView('home')}
               style={{
@@ -3025,7 +3028,7 @@ export default function LandingPage({
               <h4>Tính năng</h4>
               <a href="/flashcards" onClick={(e) => { e.preventDefault(); if (navigateTo) { navigateTo('/flashcards'); } }}>Flashcard</a>
               <a href="/mock-exams" onClick={(e) => { e.preventDefault(); if (!currentUser) { toast("Vui lòng đăng nhập để sử dụng chức năng thi thử!", 'warning'); if (onNavigateToAuth) onNavigateToAuth('login'); } else { if (navigateTo) { navigateTo('/mock-exams'); } else { setActiveLandingView('exams'); } } }}>Thi thử</a>
-              <a href="#forum" onClick={(e) => { e.preventDefault(); setActiveLandingView('forum'); }}>Cộng đồng</a>
+              <a href="/forum" onClick={(e) => { e.preventDefault(); if (navigateTo) { navigateTo('/forum'); } else { setActiveLandingView('forum'); } }}>Cộng đồng</a>
               <a href="#stats" onClick={(e) => { e.preventDefault(); setActiveLandingView('about'); }}>Về chúng tôi</a>
             </div>
             <div className="lp-footer__col">

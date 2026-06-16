@@ -655,6 +655,53 @@ function LeaderboardTab({ currentUser }) {
     return `🔥 ${student.streak || 0} ngày`;
   };
 
+  const renderAvatar = (avatar, name, size = 64, borderSize = 3) => {
+    const isUrl = typeof avatar === 'string' && (avatar.startsWith('http') || avatar.startsWith('/') || avatar.startsWith('data:'));
+    
+    if (isUrl) {
+      return (
+        <img
+          src={avatar}
+          alt={name}
+          style={{
+            width: `${size}px`,
+            height: `${size}px`,
+            borderRadius: '50%',
+            border: `${borderSize}px solid #000`,
+            objectFit: 'cover',
+            display: 'inline-block',
+            margin: size > 40 ? '14px 0' : '0',
+            boxShadow: '1.5px 1.5px 0px #000'
+          }}
+          onError={(e) => {
+            e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'HS')}&background=6c5ce7&color=fff`;
+          }}
+        />
+      );
+    }
+
+    return (
+      <div style={{
+        width: `${size}px`,
+        height: `${size}px`,
+        borderRadius: '50%',
+        background: 'linear-gradient(135deg, #6c5ce7, #a29bfe)',
+        color: '#fff',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontWeight: 'bold',
+        fontSize: size > 40 ? '18px' : '11px',
+        border: `${borderSize}px solid #000`,
+        margin: size > 40 ? '14px 0' : '0',
+        boxShadow: '1.5px 1.5px 0px #000',
+        textTransform: 'uppercase'
+      }}>
+        {avatar || name?.substring(0, 2).toUpperCase() || 'HS'}
+      </div>
+    );
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* Search and Filters Section */}
@@ -771,9 +818,12 @@ function LeaderboardTab({ currentUser }) {
                   { bg: 'linear-gradient(135deg, #ffedd5, #fed7aa)', medal: '🥉', label: 'Tam khoa', text: '#c2410c' }
                 ][index] || { bg: '#fff', medal: '⭐', label: 'Vinh danh', text: '#000' };
 
+                const cardClass = index === 0 ? "leaderboard-top-card leaderboard-top1-card animate-slide-up" : "leaderboard-top-card animate-slide-up";
+
                 return (
                   <div
                     key={student.userId}
+                    className={cardClass}
                     style={{
                       background: colors.bg,
                       border: '3px solid #000',
@@ -802,24 +852,9 @@ function LeaderboardTab({ currentUser }) {
                       {colors.label} {subject ? subject.toUpperCase() : 'Toàn sàn'}
                     </h3>
                     
-                    <div style={{
-                      width: '64px',
-                      height: '64px',
-                      borderRadius: '50%',
-                      background: '#000',
-                      color: '#fff',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontWeight: 'bold',
-                      fontSize: '18px',
-                      border: '3px solid #000',
-                      margin: '14px 0'
-                    }}>
-                      {student.avatar || student.name?.substring(0, 2).toUpperCase() || 'HS'}
-                    </div>
+                    {renderAvatar(student.avatar, student.name, 64, 3)}
 
-                    <h4 style={{ fontSize: '16px', fontWeight: '900', color: '#000', margin: '0 0 4px 0' }}>{student.name}</h4>
+                    <h4 style={{ fontSize: '16px', fontWeight: '900', color: '#000', margin: '10px 0 4px 0' }}>{student.name}</h4>
                     <p style={{ fontSize: '12px', color: '#4b5563', margin: '0 0 6px 0' }}>
                       Khối {student.grade || 'Chưa rõ'} • Tỉnh: {student.province || 'Chưa cập nhật'}
                     </p>
@@ -833,7 +868,7 @@ function LeaderboardTab({ currentUser }) {
           )}
 
           {/* Table rankings */}
-          <div className="card" style={{
+          <div className="card animate-slide-up" style={{
             border: '3px solid #000',
             boxShadow: '4px 4px 0px #000',
             padding: '24px',
@@ -860,6 +895,7 @@ function LeaderboardTab({ currentUser }) {
                   {rankings.map((student) => (
                     <tr
                       key={student.userId}
+                      className="leaderboard-row animate-slide-up"
                       style={{
                         borderBottom: '2.5px solid #000',
                         background: student.userId === currentUser?.id ? 'rgba(108, 92, 231, 0.08)' : 'transparent',
@@ -885,21 +921,7 @@ function LeaderboardTab({ currentUser }) {
                       </td>
                       <td style={{ padding: '12px 10px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <div style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '50%',
-                            background: '#000',
-                            color: '#fff',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontWeight: 'bold',
-                            fontSize: '11px',
-                            border: '2px solid #000'
-                          }}>
-                            {student.avatar || student.name?.substring(0, 2).toUpperCase() || 'HS'}
-                          </div>
+                          {renderAvatar(student.avatar, student.name, 32, 2)}
                           <div>
                             <div style={{ fontWeight: '900', fontSize: '13.5px' }}>{student.name}</div>
                             {student.userId === currentUser?.id && (
@@ -1052,6 +1074,10 @@ export default function App() {
 
     if (currentPath === '/exam-bank') {
       return { route: 'exam-bank' };
+    }
+
+    if (currentPath === '/forum' || currentPath === '/community' || currentPath === '/direct') {
+      return { route: 'forum' };
     }
 
     if (currentPath.startsWith('/confirm-email')) {
@@ -1547,6 +1573,8 @@ export default function App() {
   const handleBackToDashboard = (targetTab) => {
     if (targetTab === 'courses') {
       navigateTo('/courses');
+    } else if (targetTab === 'forum') {
+      navigateTo('/forum');
     } else {
       navigateTo('/');
       setActiveTab(targetTab || 'home');
@@ -1843,7 +1871,7 @@ export default function App() {
         <Sidebar
           role={role}
           featureFlags={featureFlags}
-          active={parsedRoute.route !== 'legacy' ? (parsedRoute.route.startsWith('mock-') ? 'tests' : (parsedRoute.route === 'ai-tutor' ? 'ai-qa' : (parsedRoute.route === 'flashcards' ? 'path' : (parsedRoute.route === 'exam-bank' ? 'library' : 'courses')))) : activeTab}
+          active={parsedRoute.route !== 'legacy' ? (parsedRoute.route.startsWith('mock-') ? 'tests' : (parsedRoute.route === 'ai-tutor' ? 'ai-qa' : (parsedRoute.route === 'flashcards' ? 'path' : (parsedRoute.route === 'exam-bank' ? 'library' : (parsedRoute.route === 'forum' ? 'forum' : 'courses'))))) : activeTab}
           setActive={(tab) => {
             if (tab === 'courses') {
               navigateTo('/courses');
@@ -1855,6 +1883,8 @@ export default function App() {
               navigateTo('/flashcards');
             } else if (tab === 'library') {
               navigateTo('/exam-bank');
+            } else if (tab === 'forum') {
+              navigateTo('/forum');
             } else {
               navigateTo('/');
               setActiveTab(tab);
@@ -2144,6 +2174,13 @@ export default function App() {
                 currentUser={currentUser}
                 navigateTo={navigateTo}
               />
+            </div>
+          )}
+
+          {/* ================= FORUM WORKSPACE ================= */}
+          {parsedRoute.route === 'forum' && (
+            <div style={{ padding: '0' }}>
+              <Forum currentUser={currentUser} />
             </div>
           )}
 

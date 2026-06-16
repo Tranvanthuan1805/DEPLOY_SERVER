@@ -334,21 +334,24 @@ export default function AuthPage({ defaultMode = 'login', onAuthSuccess, usersLi
   const handleLogin = async () => {
     setLoading(true);
     setErrorMessage('');
-    // Admin demo bypass (keep for development)
-    if ((email.toLowerCase() === 'admin@edupath.vn' || email.toLowerCase() === 'tranvanthuan2005tt@gmail.com') && password === 'admin123') {
-      setLoading(false);
-      addLog('Quản trị viên đăng nhập thành công', 'sys');
-      onAuthSuccess({ name: email.toLowerCase() === 'tranvanthuan2005tt@gmail.com' ? 'Trần Văn Thuần' : 'Quản trị viên Hệ thống', email: email.toLowerCase(), role: 'admin', avatar: 'AD' });
-      return;
-    }
+    
     try {
       const data = await api.login(email, password);
       saveAuthTokens(data);
       const mappedUser = mapBackendUser(data.user, password);
       addLog(`"${mappedUser.name}" đăng nhập thành công — vai trò: ${mappedUser.role.toUpperCase()}`, 'sys');
       onAuthSuccess(mappedUser);
-    } catch (err) {
-      setErrorMessage(err.message);
+      return;
+    } catch (apiErr) {
+      console.warn('[login] Backend login failed, checking for bypass fallback...', apiErr.message);
+      // Admin demo bypass (keep for development fallback)
+      if ((email.toLowerCase() === 'admin@edupath.vn' || email.toLowerCase() === 'tranvanthuan2005tt@gmail.com') && password === 'admin123') {
+        setLoading(false);
+        addLog('Quản trị viên đăng nhập thành công (bypass)', 'sys');
+        onAuthSuccess({ name: email.toLowerCase() === 'tranvanthuan2005tt@gmail.com' ? 'Trần Văn Thuần' : 'Quản trị viên Hệ thống', email: email.toLowerCase(), role: 'admin', avatar: 'AD' });
+        return;
+      }
+      setErrorMessage(apiErr.message);
     } finally {
       setLoading(false);
     }

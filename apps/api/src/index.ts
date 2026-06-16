@@ -3,6 +3,7 @@ import { createServer } from 'http';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { initSocket } from './lib/socket.js';
 import { prisma } from './lib/prisma.js';
@@ -11,7 +12,7 @@ import { upload } from './lib/s3.js';
 import { login, logout, sendOtp, resendOtp, verifyOtpRegister, googleAuth, googleCompleteOnboarding, changePassword, forgotPassword, verifyResetOtp, resetPassword, requestRoleChange, getRoleChangeRequests, reviewRoleChange, refreshToken } from './controllers/auth.js';
 import { getCourses, getCourseById, createCourse, getCourseStats } from './controllers/course.js';
 import { getExams, getExamById, startAttempt, saveAnswer, submitAttempt, getAttempts, getExamQuestionsPublic, getAttemptById, getAttemptResult, getExamHistory, recordViolation, recordExamEvent, getExamEvents, recordViolationDetail, generateAiCoach, createSmartRetake, importExam, generateSimilarQuestion } from './controllers/exam.js';
-import { streamAIChat, refreshRoadmap, generateAIQuestions, generateMindmap, saveMindmap, getMindmaps, getMindmapById, deleteMindmap, generateFlashcards, getPublicMindmapById } from './controllers/ai.js';
+import { streamAIChat, refreshRoadmap, generateAIQuestions, generateMindmap, saveMindmap, getMindmaps, getMindmapById, deleteMindmap, generateFlashcards, getPublicMindmapById, generateNodeQuiz, submitNodeQuiz, getNodeProgress, generateWeaknessMindmap, uploadExamFile, generateExamMindmap } from './controllers/ai.js';
 
 import { chatbotConsult } from './controllers/chatbot.js';
 import { getDocumentResources, getDocumentComments, addDocumentComment } from './controllers/document.js';
@@ -43,7 +44,12 @@ app.use(express.json());
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+const resolvedUploadsDir = path.resolve(__dirname, '../uploads');
+console.log(`[API] Static uploads serving from: ${resolvedUploadsDir}`);
+if (!fs.existsSync(resolvedUploadsDir)) {
+  fs.mkdirSync(resolvedUploadsDir, { recursive: true });
+}
+app.use('/uploads', express.static(resolvedUploadsDir));
 
 // Strip /api prefix for Vercel routing
 app.use((req, res, next) => {
@@ -182,6 +188,13 @@ app.get('/mindmaps', authenticateJWT, getMindmaps);
 app.get('/mindmaps/:id', authenticateJWT, getMindmapById);
 app.get('/mindmaps/public/:id', getPublicMindmapById);
 app.delete('/mindmaps/:id', authenticateJWT, deleteMindmap);
+
+app.post('/ai/mindmap/quiz', authenticateJWT, generateNodeQuiz);
+app.post('/ai/mindmap/quiz/submit', authenticateJWT, submitNodeQuiz);
+app.get('/mindmaps/:id/progress', authenticateJWT, getNodeProgress);
+app.post('/ai/mindmap/weakness', authenticateJWT, generateWeaknessMindmap);
+app.post('/ai/mindmap/exam-upload', authenticateJWT, upload.single('file'), uploadExamFile);
+app.post('/ai/mindmap/exam-analyse', authenticateJWT, generateExamMindmap);
 
 // Public AI Chatbot Route (No Auth required so landing page guests can use it!)
 app.post('/chatbot', chatbotConsult);

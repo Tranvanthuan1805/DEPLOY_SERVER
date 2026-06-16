@@ -100,13 +100,57 @@ export default function AITutorPage({ currentUser, navigateTo, addLog }) {
   const [editNodeDesc, setEditNodeDesc] = useState('');
   const [newChildName, setNewChildName] = useState('');
   const [newChildDesc, setNewChildDesc] = useState('');
-
   // Sidebar resizing and node shapes states
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const [editNodeShape, setEditNodeShape] = useState('oval');
   const isDraggingSidebarRef = useRef(false);
   const [blankMindmapTitle, setBlankMindmapTitle] = useState('Sơ đồ tư duy mới');
+  const examFileInputRef = useRef(null);
+  const [isDraggingExamFile, setIsDraggingExamFile] = useState(false);
 
+  const handleExamDragOver = (e) => {
+    e.preventDefault();
+    setIsDraggingExamFile(true);
+  };
+
+  const handleExamDragLeave = () => {
+    setIsDraggingExamFile(false);
+  };
+
+  const handleExamDrop = (e) => {
+    e.preventDefault();
+    setIsDraggingExamFile(false);
+    const file = e.dataTransfer?.files?.[0];
+    if (file) {
+      handleExamUpload(file);
+    }
+  };
+
+  // Node Mastery Progress
+  const [nodeProgressMap, setNodeProgressMap] = useState({});
+
+  // Node Quiz States
+  const [isQuizModalOpen, setIsQuizModalOpen] = useState(false);
+  const [quizLoading, setQuizLoading] = useState(false);
+  const [quizQuestions, setQuizQuestions] = useState([]);
+  const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
+  const [selectedAnswers, setSelectedAnswers] = useState({});
+  const [quizSubmitted, setQuizSubmitted] = useState(false);
+  const [quizResult, setQuizResult] = useState(null);
+  const [quizStartTime, setQuizStartTime] = useState(0);
+
+  // Weakness Analysis State
+  const [isGeneratingWeakness, setIsGeneratingWeakness] = useState(false);
+
+  // Exam Paper Analysis States
+  const [isExamModalOpen, setIsExamModalOpen] = useState(false);
+  const [examUploadLoading, setExamUploadLoading] = useState(false);
+  const [examAnalysisLoading, setExamAnalysisLoading] = useState(false);
+  const [examText, setExamText] = useState('');
+  const [examTitle, setExamTitle] = useState('');
+  const [examFileUrl, setExamFileUrl] = useState('');
+  const [examFileType, setExamFileType] = useState('');
+  const [uploadedFileId, setUploadedFileId] = useState(null);
   const handleSidebarMouseDown = (e) => {
     e.preventDefault();
     isDraggingSidebarRef.current = true;
@@ -621,6 +665,343 @@ export default function AITutorPage({ currentUser, navigateTo, addLog }) {
       console.error(err);
       toast('Không thể lưu sơ đồ tư duy!', 'error');
     }
+  };
+
+  const fetchNodeProgress = async (mindmapId) => {
+    if (!mindmapId || String(mindmapId).startsWith('local-')) return;
+    try {
+      const res = await api.getNodeProgress(mindmapId);
+      if (res && res.success && res.data) {
+        setNodeProgressMap(res.data);
+      }
+    } catch (e) {
+      console.error("Lỗi khi tải tiến trình học tập:", e);
+    }
+  };
+
+  useEffect(() => {
+    if (activeMindmapDbId && !String(activeMindmapDbId).startsWith('local-')) {
+      fetchNodeProgress(activeMindmapDbId);
+    } else {
+      setNodeProgressMap({});
+    }
+  }, [activeMindmapDbId]);
+
+  const handleStartNodeQuiz = async () => {
+    if (!mindmapData) return;
+    if (!selectedNode) {
+      toast("Vui lòng chọn một nút trên sơ đồ tư duy để làm quiz.", "warning");
+      return;
+    }
+    
+    let targetMindmapId = activeMindmapDbId;
+    if (!targetMindmapId || String(targetMindmapId).startsWith('local-')) {
+      toast("Đang tự động lưu sơ đồ tư duy trước khi làm quiz...", "info");
+      try {
+        const response = await api.saveMindmap(mindmapData.name, mindmapData, null);
+        if (response && response.data) {
+          targetMindmapId = response.data.id;
+          setActiveMindmapDbId(targetMindmapId);
+          const data = await api.getMindmaps();
+          setSavedMindmaps(data || []);
+        } else {
+          toast("Lỗi tự động lưu sơ đồ tư duy.", "error");
+          return;
+        }
+      } catch (e) {
+        console.error("Lỗi tự động lưu:", e);
+        toast("Lỗi tự động lưu sơ đồ tư duy.", "error");
+        return;
+      }
+    }
+
+    setQuizLoading(true);
+    setIsQuizModalOpen(true);
+    setQuizQuestions([]);
+    setCurrentQuestionIdx(0);
+    setSelectedAnswers({});
+    setQuizSubmitted(false);
+    setQuizResult(null);
+    setQuizStartTime(Date.now());
+
+    try {
+      const res = await api.generateNodeQuiz(targetMindmapId, selectedNode.id);
+      if (res && res.success && res.data) {
+        setQuizQuestions(res.data);
+      } else {
+        toast("Không thể tải câu hỏi luyện tập.", "error");
+        setIsQuizModalOpen(false);
+      }
+    } catch (e) {
+      console.error(e);
+      toast("Lỗi khi tải câu hỏi luyện tập từ AI.", "error");
+      setIsQuizModalOpen(false);
+    } finally {
+      setQuizLoading(false);
+    }
+  };
+
+  const handleSelectQuizOption = (questionId, optionIdx) => {
+    if (quizSubmitted) return;
+    setSelectedAnswers(prev => ({
+      ...prev,
+      [questionId]: optionIdx
+    }));
+  };
+
+  const handleSubmitQuiz = async () => {
+    if (quizQuestions.length === 0 || quizSubmitted) return;
+    
+    if (Object.keys(selectedAnswers).length < quizQuestions.length) {
+      toast("Vui lòng trả lời đầy đủ các câu hỏi trước khi nộp bài.", "warning");
+      return;
+    }
+
+    setQuizLoading(true);
+    const completionTime = Math.round((Date.now() - quizStartTime) / 1000);
+    const formattedAnswers = Object.entries(selectedAnswers).map(([qId, optIdx]) => ({
+      questionId: Number(qId),
+      selectedOption: Number(optIdx)
+    }));
+
+    try {
+      const res = await api.submitNodeQuiz(activeMindmapDbId, selectedNode.id, formattedAnswers, completionTime);
+      if (res && res.success && res.data) {
+        setQuizResult(res.data);
+        setQuizSubmitted(true);
+        fetchNodeProgress(activeMindmapDbId);
+        toast(`Nộp bài thành công! Bạn đạt ${res.data.score}/${res.data.total} câu.`, "success");
+      } else {
+        toast("Lỗi nộp bài thi trắc nghiệm.", "error");
+      }
+    } catch (e) {
+      console.error(e);
+      toast("Lỗi nộp bài thi trắc nghiệm.", "error");
+    } finally {
+      setQuizLoading(false);
+    }
+  };
+
+  const handleGenerateWeaknessMindmap = async () => {
+    setIsGeneratingWeakness(true);
+    try {
+      const res = await api.generateWeaknessMindmap();
+      if (res && res.success && res.data) {
+        const parsed = typeof res.data.content === 'string' ? JSON.parse(res.data.content) : res.data.content;
+        const structured = assignIds(parsed);
+        setMindmapData(structured);
+        setActiveMindmapDbId(res.data.id);
+        setSelectedNode(null);
+
+        const newExpanded = new Set();
+        newExpanded.add(structured.id);
+        structured.children?.forEach(ch => {
+          newExpanded.add(ch.id);
+        });
+        setExpandedNodes(newExpanded);
+
+        const listData = await api.getMindmaps();
+        setSavedMindmaps(listData || []);
+        
+        toast("Đã tạo thành công Sơ đồ tư duy khắc phục lỗ hổng kiến thức!", "success");
+      } else if (res && res.message) {
+        toast(res.message, "info");
+      } else {
+        toast("Không thể chẩn đoán vùng yếu. Hãy làm thêm một số bài quiz nhé!", "warning");
+      }
+    } catch (e) {
+      console.error(e);
+      toast("Lỗi khi tạo sơ đồ vùng yếu bằng AI.", "error");
+    } finally {
+      setIsGeneratingWeakness(false);
+    }
+  };
+
+  const handleExamUpload = async (file) => {
+    if (!file) return;
+    const allowed = ['pdf', 'docx', 'png', 'jpg', 'jpeg', 'txt', 'md'];
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (!ext || !allowed.includes(ext)) {
+      toast("Tệp tin không được hỗ trợ! Chỉ cho phép PDF, DOCX, Hình ảnh hoặc Văn bản.", "warning");
+      return;
+    }
+
+    setExamUploadLoading(true);
+    setExamTitle(file.name.replace(/\.[^/.]+$/, ""));
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await api.uploadExamFile(formData);
+      if (res && res.success && res.data) {
+        setExamText(res.data.extractedText || '');
+        setExamFileUrl(res.data.fileUrl || '');
+        setExamFileType(res.data.fileType || '');
+        setUploadedFileId(res.data.id);
+        toast("Tải lên đề thi thành công! Đã trích xuất nội dung.", "success");
+      } else {
+        toast("Không thể trích xuất nội dung file.", "error");
+      }
+    } catch (e) {
+      console.error(e);
+      toast("Lỗi tải lên tệp tin.", "error");
+    } finally {
+      setExamUploadLoading(false);
+    }
+  };
+
+  const handleAnalyzeExam = async () => {
+    if (!examText.trim()) {
+      toast("Nội dung đề thi trống. Hãy viết hoặc tải tệp tin.", "warning");
+      return;
+    }
+
+    setExamAnalysisLoading(true);
+    try {
+      const res = await api.generateExamMindmap({
+        title: examTitle.trim() || "Phân tích Đề thi",
+        text: examText,
+        fileUrl: examFileUrl,
+        fileType: examFileType,
+        uploadId: uploadedFileId
+      });
+
+      if (res && res.success && res.data) {
+        const data = await api.getMindmapById(res.data.mindmapId);
+        if (data) {
+          const parsed = typeof data.content === 'string' ? JSON.parse(data.content) : data.content;
+          const structured = assignIds(parsed);
+          setMindmapData(structured);
+          setActiveMindmapDbId(data.id);
+          setSelectedNode(null);
+
+          const newExpanded = new Set();
+          newExpanded.add(structured.id);
+          structured.children?.forEach(ch => {
+            newExpanded.add(ch.id);
+          });
+          setExpandedNodes(newExpanded);
+
+          const listData = await api.getMindmaps();
+          setSavedMindmaps(listData || []);
+          
+          setIsExamModalOpen(false);
+          toast("Đã lập thành công Sơ đồ tư duy cấu trúc đề thi!", "success");
+        }
+      } else {
+        toast("AI lỗi khi phân tích đề thi.", "error");
+      }
+    } catch (e) {
+      console.error(e);
+      toast("Lỗi khi lập sơ đồ đề thi bằng AI.", "error");
+    } finally {
+      setExamAnalysisLoading(false);
+    }
+  };
+
+  const getNodeProgressStyle = (node, isRoot, isLevel1) => {
+    const nodeId = node.id;
+    
+    if (node.priority) {
+      const priority = node.priority.toLowerCase();
+      let priorityBg = 'rgba(249, 115, 22, 0.15)';
+      let priorityBorder = '#F97316';
+      if (priority === 'critical') {
+        priorityBg = 'rgba(153, 27, 27, 0.18)';
+        priorityBorder = '#991B1B';
+      } else if (priority === 'high') {
+        priorityBg = 'rgba(220, 38, 38, 0.15)';
+        priorityBorder = '#DC2626';
+      } else if (priority === 'medium') {
+        priorityBg = 'rgba(217, 119, 6, 0.15)';
+        priorityBorder = '#D97606';
+      } else if (priority === 'low') {
+        priorityBg = 'rgba(202, 138, 4, 0.15)';
+        priorityBorder = '#CA8A04';
+      }
+      
+      return {
+        background: priorityBg,
+        border: `2px solid ${priorityBorder}`,
+        borderLeft: `6px solid ${priorityBorder}`,
+        color: 'var(--text-primary)'
+      };
+    }
+
+    const progress = nodeProgressMap[nodeId];
+    if (!progress || progress.mastery === undefined) {
+      return {
+        background: isRoot 
+          ? 'linear-gradient(135deg, #4F46E5, #7C3AED)' 
+          : (isLevel1 ? 'var(--bg-card)' : 'var(--bg-main)'),
+        borderLeft: isRoot ? 'none' : (isLevel1 ? '6px solid #8B5CF6' : '6px solid #0D9488'),
+        border: isRoot ? 'none' : (isLevel1 ? '2px solid #8B5CF6' : '1px solid var(--border)'),
+        color: isRoot ? '#FFFFFF' : 'var(--text-primary)'
+      };
+    }
+
+    const mastery = progress.mastery;
+    let masteryColor = '#94A3B8';
+    let borderColor = '#94A3B8';
+
+    if (mastery < 0.4) {
+      masteryColor = 'rgba(239, 68, 68, 0.15)';
+      borderColor = '#EF4444';
+    } else if (mastery < 0.6) {
+      masteryColor = 'rgba(249, 115, 22, 0.15)';
+      borderColor = '#F97316';
+    } else if (mastery < 0.8) {
+      masteryColor = 'rgba(234, 179, 8, 0.15)';
+      borderColor = '#EAB308';
+    } else if (mastery < 0.9) {
+      masteryColor = 'rgba(59, 130, 246, 0.15)';
+      borderColor = '#3B82F6';
+    } else {
+      masteryColor = 'rgba(16, 185, 129, 0.15)';
+      borderColor = '#10B981';
+    }
+
+    if (isRoot) {
+      return {
+        background: 'linear-gradient(135deg, #4F46E5, #7C3AED)',
+        border: `3px solid ${borderColor}`,
+        color: '#FFFFFF',
+        borderLeft: 'none'
+      };
+    }
+
+    return {
+      background: masteryColor,
+      border: `2px solid ${borderColor}`,
+      borderLeft: `6px solid ${borderColor}`,
+      color: 'var(--text-primary)'
+    };
+  };
+
+  const getNodeTooltip = (node) => {
+    const nodeId = node.id;
+    const progress = nodeProgressMap[nodeId];
+    
+    if (node.priority) {
+      return `${node.name}\n---\nKhắc phục sai sót [Mức: ${node.priority}]\nGợi ý: ${node.description || 'Xem lại kiến thức'}`;
+    }
+    
+    if (!progress || progress.mastery === undefined) {
+      return `${node.name}\nTiến độ: Chưa bắt đầu`;
+    }
+    
+    const mastery = progress.mastery;
+    let status = 'Chưa luyện tập';
+    if (mastery < 0.4) status = 'Yếu';
+    else if (mastery < 0.6) status = 'Cơ bản';
+    else if (mastery < 0.8) status = 'Khá';
+    else if (mastery < 0.9) status = 'Giỏi';
+    else status = 'Thành thạo';
+
+    const dateStr = progress.lastPracticed ? new Date(progress.lastPracticed).toLocaleDateString('vi-VN') : 'Chưa rõ';
+
+    return `${node.name}\n---\nĐộ thành thạo: ${status} (${Math.round(mastery * 100)}%)\nĐiểm cao nhất: ${progress.bestScore || 0}/10\nSố lần luyện tập: ${progress.attempts || 0}\nLần luyện tập cuối: ${dateStr}`;
   };
 
   const handleShareMindmap = () => {
@@ -1384,6 +1765,43 @@ export default function AITutorPage({ currentUser, navigateTo, addLog }) {
               {mindmapData && (
                 <>
                   <button 
+                    className="canvas-action-pill"
+                    onClick={handleGenerateWeaknessMindmap}
+                    disabled={isGeneratingWeakness}
+                    style={{
+                      background: 'rgba(239, 68, 68, 0.12)',
+                      borderColor: 'rgba(239, 68, 68, 0.3)',
+                      color: '#EF4444'
+                    }}
+                    title="Phân tích lỗi sai & tạo sơ đồ lấp lỗ hổng kiến thức"
+                  >
+                    {isGeneratingWeakness ? (
+                      <><span className="spinner-mini" style={{ display: 'inline-block', width: '10px', height: '10px', border: '2px solid #ef4444', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.6s linear infinite', marginRight: '4px' }} /> Đang tạo...</>
+                    ) : (
+                      <>⚡ Sơ đồ vùng yếu</>
+                    )}
+                  </button>
+
+                  <button 
+                    className="canvas-action-pill"
+                    onClick={() => {
+                      setIsExamModalOpen(true);
+                      setExamText('');
+                      setExamFileUrl('');
+                      setExamFileType('');
+                      setUploadedFileId(null);
+                    }}
+                    style={{
+                      background: 'rgba(59, 130, 246, 0.12)',
+                      borderColor: 'rgba(59, 130, 246, 0.3)',
+                      color: '#3B82F6'
+                    }}
+                    title="Tải lên đề thi (PDF, DOCX, Ảnh) để lập sơ đồ cấu trúc chủ đề"
+                  >
+                    📝 Sơ đồ đề thi
+                  </button>
+
+                  <button 
                     className="canvas-action-pill" 
                     onClick={handleSaveMindmap} 
                     title="Lưu sơ đồ tư duy vào thư viện"
@@ -1481,10 +1899,13 @@ export default function AITutorPage({ currentUser, navigateTo, addLog }) {
                     const isLevel1 = node.depth === 1;
                     const isExpanded = expandedNodes.has(node.id);
 
+                    // Progress-based Styling
+                    const progressStyle = getNodeProgressStyle(node, isRoot, isLevel1);
+
                     // Custom Shapes Styling
                     let borderRadius = '14px';
-                    let borderLeft = isRoot ? 'none' : (isLevel1 ? '6px solid #8B5CF6' : '6px solid #0D9488');
-                    let border = isRoot ? 'none' : (isLevel1 ? '2px solid #8B5CF6' : '1px solid var(--border)');
+                    let borderLeft = progressStyle.borderLeft;
+                    let border = progressStyle.border;
                     let clipPath = 'none';
                     let width = '100%';
                     let height = '100%';
@@ -1501,13 +1922,13 @@ export default function AITutorPage({ currentUser, navigateTo, addLog }) {
                       height = '80px';
                       margin = '0 auto';
                       borderLeft = 'none';
-                      border = isRoot ? '2px solid #fff' : (isLevel1 ? '2px solid #8B5CF6' : '2px solid #0D9488');
+                      border = progressStyle.border;
                       padding = '6px';
                     } else if (node.shape === 'rhombus') {
                       clipPath = 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)';
                       borderRadius = '0px';
                       borderLeft = 'none';
-                      border = isRoot ? '2px solid #fff' : (isLevel1 ? '2px solid #8B5CF6' : '2px solid #0D9488');
+                      border = progressStyle.border;
                       padding = '12px 28px';
                     }
 
@@ -1518,6 +1939,7 @@ export default function AITutorPage({ currentUser, navigateTo, addLog }) {
                           <div 
                             xmlns="http://www.w3.org/1999/xhtml"
                             onClick={() => handleNodeSelect(node)}
+                            title={getNodeTooltip(node)}
                             style={{
                               width: width,
                               height: height,
@@ -1528,10 +1950,8 @@ export default function AITutorPage({ currentUser, navigateTo, addLog }) {
                               textAlign: 'center',
                               padding: padding,
                               boxSizing: 'border-box',
-                              background: isRoot 
-                                ? 'linear-gradient(135deg, #4F46E5, #7C3AED)' 
-                                : (isLevel1 ? 'var(--bg-card)' : 'var(--bg-main)'),
-                              color: isRoot ? '#FFFFFF' : 'var(--text-primary)',
+                              background: progressStyle.background,
+                              color: progressStyle.color,
                               border: border,
                               borderLeft: borderLeft,
                               borderRadius: borderRadius,
@@ -1695,6 +2115,81 @@ export default function AITutorPage({ currentUser, navigateTo, addLog }) {
                 </div>
               </div>
 
+              {/* Practice & Progress stats and quiz trigger */}
+              <div className="drawer-section" style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', marginBottom: '16px' }}>
+                <h4 className="drawer-chat-title" style={{ marginBottom: '10px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  🎯 Luyện tập trắc nghiệm
+                </h4>
+                
+                {/* Stats cards grid */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '8px',
+                  marginBottom: '12px'
+                }}>
+                  <div style={{
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    padding: '8px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>Độ thành thạo</div>
+                    <div style={{
+                      fontSize: '14px',
+                      fontWeight: 'bold',
+                      color: nodeProgressMap[selectedNode.id]?.mastery !== undefined
+                        ? (nodeProgressMap[selectedNode.id].mastery >= 0.9 ? '#10B981' : nodeProgressMap[selectedNode.id].mastery >= 0.8 ? '#3B82F6' : nodeProgressMap[selectedNode.id].mastery >= 0.6 ? '#EAB308' : nodeProgressMap[selectedNode.id].mastery >= 0.4 ? '#F97316' : '#EF4444')
+                        : 'var(--text-secondary)'
+                    }}>
+                      {nodeProgressMap[selectedNode.id]?.mastery !== undefined
+                        ? `${Math.round(nodeProgressMap[selectedNode.id].mastery * 100)}%`
+                        : 'Chưa học'
+                      }
+                    </div>
+                  </div>
+                  <div style={{
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    padding: '8px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>Điểm cao nhất</div>
+                    <div style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--fc-gold)' }}>
+                      {nodeProgressMap[selectedNode.id]?.bestScore !== undefined
+                        ? `${nodeProgressMap[selectedNode.id].bestScore}/10`
+                        : '- / 10'
+                      }
+                    </div>
+                  </div>
+                </div>
+
+                <button 
+                  className="aitutor-action-btn" 
+                  onClick={handleStartNodeQuiz}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    fontSize: '12.5px',
+                    background: 'linear-gradient(135deg, #F97316, #FFE259)',
+                    boxShadow: '0 4px 12px rgba(249, 115, 22, 0.25)',
+                    border: 'none',
+                    borderRadius: '10px',
+                    fontWeight: '800',
+                    color: '#12120e',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <HiSparkles /> Bắt đầu Quiz 10 câu
+                </button>
+              </div>
+
               {/* Add Child Node Form */}
               <div className="drawer-section" style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', marginBottom: '16px' }}>
                 <h4 className="drawer-chat-title" style={{ marginBottom: '10px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -1811,6 +2306,334 @@ export default function AITutorPage({ currentUser, navigateTo, addLog }) {
           </aside>
         )}
       </div>
+
+      {/* Quiz Modal overlay */}
+      {isQuizModalOpen && (
+        <div className="mm-modal-overlay animate-in">
+          <div className="mm-modal-card mm-quiz-modal">
+            {/* Header */}
+            <div className="mm-modal-header">
+              <h3 className="mm-modal-title">
+                🎯 Luyện tập: {selectedNode?.name}
+              </h3>
+              <button 
+                className="mm-modal-close" 
+                onClick={() => {
+                  if (quizSubmitted || confirm("Bạn đang làm dở bài quiz. Bạn có chắc chắn muốn thoát?")) {
+                    setIsQuizModalOpen(false);
+                  }
+                }}
+              >
+                <HiX />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="mm-modal-body">
+              {quizLoading ? (
+                <div className="mm-quiz-loading-container">
+                  <span className="spinner-secondary mm-quiz-spinner" />
+                  <p className="mm-quiz-loading-text">
+                    EduPath AI đang biên tập 10 câu hỏi trắc nghiệm bám sát cấu trúc đề thi THPT Quốc gia...
+                  </p>
+                  <p className="mm-quiz-loading-sub">Vui lòng chờ trong giây lát (khoảng 5-10 giây)</p>
+                </div>
+              ) : quizQuestions.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '24px', color: 'var(--text-secondary)' }}>
+                  Không thể tải câu hỏi trắc nghiệm. Hãy đóng modal và thử lại.
+                </div>
+              ) : (
+                <>
+                  {/* Progress Header / Sequential Nav */}
+                  {!quizSubmitted && (
+                    <div className="mm-quiz-progress-bar">
+                      <div className="mm-quiz-progress-text">
+                        <span>Câu hỏi {currentQuestionIdx + 1} / {quizQuestions.length}</span>
+                        <span>Đã trả lời: {Object.keys(selectedAnswers).length} / {quizQuestions.length}</span>
+                      </div>
+                      <div className="mm-quiz-progress-track">
+                        <div 
+                          className="mm-quiz-progress-fill" 
+                          style={{ width: `${((currentQuestionIdx + 1) / quizQuestions.length) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Sequential Question View */}
+                  {!quizSubmitted ? (
+                    <div className="mm-quiz-question-container">
+                      <h4 className="mm-quiz-question-text">
+                        {quizQuestions[currentQuestionIdx]?.questionText}
+                      </h4>
+                      
+                      <div className="mm-quiz-options-grid">
+                        {(quizQuestions[currentQuestionIdx]?.options || []).map((option, idx) => {
+                          const isSelected = selectedAnswers[quizQuestions[currentQuestionIdx].id] === idx;
+                          return (
+                            <button
+                              key={idx}
+                              className={`mm-quiz-option-btn ${isSelected ? 'mm-quiz-option-btn--selected' : ''}`}
+                              onClick={() => handleSelectQuizOption(quizQuestions[currentQuestionIdx].id, idx)}
+                            >
+                              <span className="option-label">
+                                {String.fromCharCode(65 + idx)}
+                              </span>
+                              <span className="option-text">{option}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Navigation buttons */}
+                      <div className="mm-quiz-navigation">
+                        <button
+                          className="mm-quiz-nav-btn"
+                          disabled={currentQuestionIdx === 0}
+                          onClick={() => setCurrentQuestionIdx(prev => prev - 1)}
+                        >
+                          <HiChevronLeft /> Câu trước
+                        </button>
+                        
+                        {currentQuestionIdx < quizQuestions.length - 1 ? (
+                          <button
+                            className="mm-quiz-nav-btn"
+                            onClick={() => setCurrentQuestionIdx(prev => prev + 1)}
+                          >
+                            Câu tiếp <HiChevronRight />
+                          </button>
+                        ) : (
+                          <button
+                            className="mm-quiz-submit-btn"
+                            onClick={handleSubmitQuiz}
+                          >
+                            <HiSparkles /> Nộp bài & Xem kết quả
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    /* Quiz Results Dashboard & Review */
+                    <div className="mm-quiz-results-container">
+                      {/* Score circle & details */}
+                      <div className="mm-quiz-score-card">
+                        <div className="score-circle">
+                          <span className="score-num">{quizResult?.score}</span>
+                          <span className="score-total">/10</span>
+                        </div>
+                        <div className="score-details">
+                          <h4>
+                            {quizResult?.score >= 9 ? '🏆 Xuất sắc!' : quizResult?.score >= 8 ? '🌟 Rất tốt!' : quizResult?.score >= 6 ? '👍 Khá' : quizResult?.score >= 4 ? '⚠️ Cần cải thiện' : '❌ Yếu'}
+                          </h4>
+                          <p>
+                            Độ thành thạo cập nhật: <strong>{Math.round((quizResult?.mastery || 0) * 100)}%</strong>
+                          </p>
+                          <p style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                            Thời gian hoàn thành: {quizResult?.completionTime || 0} giây
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Question Corrections Review List */}
+                      <div className="mm-quiz-review-section">
+                        <h4 className="review-title">Xem lại đáp án chi tiết</h4>
+                        <div className="review-list">
+                          {quizQuestions.map((q, idx) => {
+                            const correction = quizResult?.corrections?.find(c => c.questionId === q.id) || {};
+                            const userAns = correction.selectedOption;
+                            const correctAns = correction.correctOption;
+                            const isCorrect = correction.isCorrect;
+
+                            return (
+                              <div key={q.id} className={`review-item ${isCorrect ? 'review-item--correct' : 'review-item--incorrect'}`}>
+                                <div className="review-question-header">
+                                  <span className={`review-status-badge ${isCorrect ? 'badge-correct' : 'badge-incorrect'}`}>
+                                    {isCorrect ? 'Đúng' : 'Sai'}
+                                  </span>
+                                  <h5>Câu {idx + 1}: {q.questionText}</h5>
+                                </div>
+                                <div className="review-options-list">
+                                  {(q.options || []).map((opt, oIdx) => {
+                                    let classSuffix = '';
+                                    if (oIdx === correctAns) classSuffix = '--correct';
+                                    else if (oIdx === userAns && !isCorrect) classSuffix = '--user-incorrect';
+
+                                    return (
+                                      <div key={oIdx} className={`review-option-item${classSuffix}`}>
+                                        <span className="opt-label">{String.fromCharCode(65 + oIdx)}</span>
+                                        <span className="opt-text">{opt}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                                <div className="review-explanation">
+                                  <strong>💡 Giải thích chi tiết:</strong>
+                                  <p>{correction.explanation || q.explanation}</p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Footer Actions */}
+                      <div className="mm-quiz-results-footer">
+                        <button 
+                          className="mm-quiz-action-btn-secondary" 
+                          onClick={() => {
+                            setIsQuizModalOpen(false);
+                          }}
+                        >
+                          Quay lại sơ đồ
+                        </button>
+                        <button 
+                          className="mm-quiz-action-btn-primary" 
+                          onClick={handleStartNodeQuiz}
+                        >
+                          <HiRefresh /> Luyện tập lại
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Exam Upload & Analyse Modal */}
+      {isExamModalOpen && (
+        <div className="mm-modal-overlay animate-in" onDragOver={handleExamDragOver} onDragLeave={handleExamDragLeave} onDrop={handleExamDrop}>
+          <div className="mm-modal-card mm-exam-modal" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="mm-modal-header">
+              <h3 className="mm-modal-title">
+                📝 Lập sơ đồ cấu trúc đề thi bằng AI
+              </h3>
+              <button 
+                className="mm-modal-close" 
+                onClick={() => {
+                  if (!examAnalysisLoading) setIsExamModalOpen(false);
+                }}
+              >
+                <HiX />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="mm-modal-body">
+              {examAnalysisLoading ? (
+                <div className="mm-quiz-loading-container">
+                  <span className="spinner-secondary mm-quiz-spinner" />
+                  <p className="mm-quiz-loading-text">
+                    EduPath AI đang đọc đề thi, phân loại các dạng toán, ước lượng trọng số điểm và thiết lập sơ đồ...
+                  </p>
+                  <p className="mm-quiz-loading-sub">Quá trình này có thể mất 15-20 giây. Vui lòng không đóng cửa sổ.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  
+                  {/* Title Input */}
+                  <div>
+                    <label className="flashcard-modal-label" style={{ marginBottom: '6px', display: 'block', fontSize: '12px' }}>
+                      Tiêu đề sơ đồ / Tên đề thi:
+                    </label>
+                    <input 
+                      type="text" 
+                      className="flashcard-modal-input"
+                      placeholder="Ví dụ: Đề thi thử THPT Quốc gia môn Toán 2026 - Chuyên KHTN"
+                      value={examTitle}
+                      onChange={(e) => setExamTitle(e.target.value)}
+                      style={{ background: '#141410', width: '100%', padding: '10px 12px', fontSize: '13px', boxSizing: 'border-box' }}
+                    />
+                  </div>
+
+                  {/* File Upload drag/drop zone */}
+                  <div>
+                    <label className="flashcard-modal-label" style={{ marginBottom: '6px', display: 'block', fontSize: '12px' }}>
+                      Tải đề thi lên (Hỗ trợ PDF, DOCX, Ảnh, Text):
+                    </label>
+                    <div 
+                      className={`aitutor-dropzone ${examUploadLoading ? 'aitutor-dropzone--active' : ''} ${isDraggingExamFile ? 'aitutor-dropzone--dragging' : ''}`}
+                      onClick={() => !examUploadLoading && examFileInputRef.current?.click()}
+                      style={{ padding: '28px 16px' }}
+                    >
+                      <input 
+                        type="file" 
+                        ref={examFileInputRef} 
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleExamUpload(file);
+                        }}
+                        accept="image/*,text/plain,.txt,.md,application/pdf,.pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        style={{ display: 'none' }} 
+                      />
+                      {examUploadLoading ? (
+                        <>
+                          <span className="spinner" />
+                          <p style={{ marginTop: '8px', fontSize: '12px', color: 'var(--mm-gold)' }}>
+                            Đang trích xuất nội dung đề thi (OCR)...
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <HiUpload className="aitutor-dropzone-icon" />
+                          <p className="aitutor-dropzone-title">Kéo thả đề thi vào đây hoặc click để chọn file</p>
+                          <p className="aitutor-dropzone-desc">File PDF, Word (.docx), Ảnh đề thi hoặc file văn bản ghi chú</p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Raw Exam Text / Extracted Text Review Area */}
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <label className="flashcard-modal-label" style={{ fontSize: '12px' }}>
+                        Nội dung văn bản đề thi (Xem/chỉnh sửa trực tiếp):
+                      </label>
+                      {examFileUrl && (
+                        <span style={{ fontSize: '11px', color: 'var(--mm-gold)' }}>
+                          ✓ Trích xuất từ file thành công
+                        </span>
+                      )}
+                    </div>
+                    <textarea
+                      className="aitutor-textarea"
+                      placeholder="Dán nội dung đề thi của bạn vào đây nếu không tải tệp lên. Càng chi tiết thì AI phân loại càng chuẩn..."
+                      value={examText}
+                      onChange={(e) => setExamText(e.target.value)}
+                      style={{ minHeight: '140px', background: '#141410', fontSize: '12px', width: '100%', boxSizing: 'border-box' }}
+                    />
+                  </div>
+
+                  {/* Trigger Button */}
+                  <button
+                    className="aitutor-action-btn"
+                    onClick={handleAnalyzeExam}
+                    disabled={!examText.trim() || examAnalysisLoading}
+                    style={{
+                      marginTop: '10px',
+                      padding: '12px',
+                      fontSize: '13px',
+                      fontWeight: '800',
+                      background: 'linear-gradient(135deg, #3B82F6, #8B5CF6)',
+                      boxShadow: '0 4px 12px rgba(59, 130, 246, 0.25)',
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '10px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    🚀 Bắt đầu Phân tích cấu trúc & Lập sơ đồ
+                  </button>
+
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

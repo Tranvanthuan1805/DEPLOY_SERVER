@@ -362,6 +362,36 @@ export const api = {
       ? `/v1/users/${userId}/activity-heatmap${year ? `?year=${year}` : ''}`
       : `/v1/users/me/activity-heatmap${year ? `?year=${year}` : ''}`;
     return request(url);
-  }
+  },
+
+  generateNodeQuiz: (mindmapId, nodeKey) =>
+    request('/ai/mindmap/quiz', {
+      method: 'POST',
+      body: { mindmapId, nodeKey }
+    }),
+
+  submitNodeQuiz: (mindmapId, nodeKey, answers, completionTime) =>
+    request('/ai/mindmap/quiz/submit', {
+      method: 'POST',
+      body: { mindmapId, nodeKey, answers, completionTime }
+    }),
+
+  getNodeProgress: (mindmapId) =>
+    request(`/mindmaps/${mindmapId}/progress`, { method: 'GET' }),
+
+  generateWeaknessMindmap: () =>
+    request('/ai/mindmap/weakness', { method: 'POST' }),
+
+  uploadExamFile: (formData) =>
+    request('/ai/mindmap/exam-upload', {
+      method: 'POST',
+      body: formData
+    }),
+
+  generateExamMindmap: (payload) =>
+    request('/ai/mindmap/exam-analyse', {
+      method: 'POST',
+      body: payload
+    })
 };
 

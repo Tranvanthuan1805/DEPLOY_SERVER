@@ -7,7 +7,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Ensure the local uploads directory exists
-const uploadsDir = path.join(__dirname, '../../uploads');
+const uploadsDir = path.resolve(__dirname, '../../uploads');
+console.log(`[API] Uploads directory target in s3.ts: ${uploadsDir}`);
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
