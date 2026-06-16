@@ -86,9 +86,9 @@ model Course {
   title        String
   description  String
   subject      String
-  subjectGroup String       @default("")
   level        String?
   price        Float
+  discount     Int          @default(0)
   thumbnailUrl String?
   isPublished  Boolean      @default(false)
   isApproved   Boolean      @default(false)

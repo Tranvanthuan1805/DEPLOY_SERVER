@@ -95,13 +95,26 @@ export default function CheckoutModal({ course, onClose, onPaymentSuccess, addLo
 
   const handleApplyPromoCode = () => {
     const code = promoCode.trim().toUpperCase();
-    if (code === 'EDUPATH2026' || code === 'THPT2026' || code === 'KHUYENMAI20') {
+    if (code === 'FREE100') {
+      setDiscountPercent(100);
+      setPromoStatus('success');
+    } else if (code === 'EDUPATH2026' || code === 'THPT2026' || code === 'KHUYENMAI20') {
       setDiscountPercent(20);
       setPromoStatus('success');
     } else {
       setDiscountPercent(0);
       setPromoStatus('invalid');
     }
+  };
+
+  const handleFreeCheckout = () => {
+    addLog(`[Free Code] Kích hoạt khóa học "${course.title}" miễn phí 100% bằng mã giảm giá...`, 'sys');
+    setStep(3);
+    setTimeout(() => {
+      addLog(`[Free Code] Kích hoạt thành công! Đã mở khóa khóa học: "${course.title}"`, 'sys');
+      onPaymentSuccess(course.id);
+      setStep(4);
+    }, 1200);
   };
 
   const handleSimulatePayment = () => {
@@ -286,7 +299,7 @@ export default function CheckoutModal({ course, onClose, onPaymentSuccess, addLo
                 </div>
                 {promoStatus === 'success' && (
                   <span style={{ fontSize: '12.5px', color: 'var(--accent-green)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    ✓ Áp dụng mã giảm giá thành công! Giảm 20% (Khuyến mãi THPTQG).
+                    ✓ Áp dụng mã giảm giá thành công! Giảm {discountPercent}% ({discountPercent === 100 ? 'Khuyến mãi đặc biệt' : 'Khuyến mãi THPTQG'}).
                   </span>
                 )}
                 {promoStatus === 'invalid' && (
@@ -312,7 +325,7 @@ export default function CheckoutModal({ course, onClose, onPaymentSuccess, addLo
                 </div>
                 {discountAmount > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13.5px', color: 'var(--accent-red)', fontWeight: 'bold' }}>
-                    <span>Giảm giá (Discount -20%):</span>
+                    <span>Giảm giá (Discount -{discountPercent}%):</span>
                     <span style={{ float: 'right' }}>-{discountAmount.toLocaleString('vi-VN')}đ</span>
                   </div>
                 )}
@@ -337,10 +350,10 @@ export default function CheckoutModal({ course, onClose, onPaymentSuccess, addLo
               <button
                 type="button"
                 className="btn-primary"
-                onClick={() => setStep(2)}
+                onClick={finalAmount === 0 ? handleFreeCheckout : () => setStep(2)}
                 style={{ padding: '12px 32px' }}
               >
-                Xác nhận thanh toán ➔
+                {finalAmount === 0 ? 'Nhận khóa học miễn phí ➔' : 'Xác nhận thanh toán ➔'}
               </button>
             </div>
           </div>

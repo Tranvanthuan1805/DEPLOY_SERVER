@@ -6,10 +6,11 @@ import studentLearningImg from '../assets/student_learning.png';
 import studentSuccessImg from '../assets/student_success.png';
 import educatorsTeamImg from '../assets/educators_team.png';
 
-const getCourseImage = (courseId) => {
-  if (courseId === 1) return teacherMathImg;
-  if (courseId === 2) return studentLearningImg;
-  if (courseId === 3) return studentSuccessImg;
+const getCourseImage = (course) => {
+  const subject = course?.subject || '';
+  if (subject === 'Toán' || subject === 'Toán học') return teacherMathImg;
+  if (subject === 'Vật lý') return studentLearningImg;
+  if (subject === 'Hóa học') return studentSuccessImg;
   return educatorsTeamImg;
 };
 
@@ -50,28 +51,25 @@ export default function CourseMall({ courses, currentUser, onSelectCourse, onLea
 
   // Add rich visual mockup info to initial courses
   const decoratedCourses = courses.map(c => {
-    const isUnlocked = c.id === 1 || currentUser?.unlockedCourses?.includes(c.id) || currentUser?.unlockedCourses?.includes(c.id.toString());
+    const isUnlocked = c.priceSale === 0 || 
+                       currentUser?.unlockedCourses?.includes(c.id) || 
+                       currentUser?.unlockedCourses?.includes(c.id.toString()) ||
+                       currentUser?.unlockedCourses?.includes(Number(c.id));
     
-    let rating = '4.9';
-    let students = '1,240';
-    let duration = '45 giờ học';
-    let imageBg = 'linear-gradient(135deg, #6C5CE7, #a29bfe)';
-
-    if (c.id === 1) {
-      rating = '4.8';
-      students = '2,150';
-      duration = '32 giờ học';
+    const rating = c.rating?.toString() || '4.8';
+    const students = c.studentCount?.toLocaleString() || '1,200';
+    const duration = c.durationHours ? `${c.durationHours} giờ học` : '15 giờ học';
+    
+    // Choose dynamic gradient background based on subject
+    let imageBg = 'linear-gradient(135deg, #6C5CE7, #a29bfe)'; // Default purple/blue
+    if (c.subject === 'Toán' || c.subject === 'Toán học') {
       imageBg = 'linear-gradient(135deg, #0984E3, #74b9ff)';
-    } else if (c.id === 2) {
-      rating = '4.9';
-      students = '1,890';
-      duration = '40 giờ học';
+    } else if (c.subject === 'Vật lý') {
       imageBg = 'linear-gradient(135deg, #e17055, #fab1a0)';
-    } else if (c.id === 3) {
-      rating = '4.7';
-      students = '950';
-      duration = '28 giờ học';
+    } else if (c.subject === 'Hóa học') {
       imageBg = 'linear-gradient(135deg, #00b894, #55efc4)';
+    } else if (c.subject === 'Tiếng Anh') {
+      imageBg = 'linear-gradient(135deg, #fd79a8, #fdcb6e)';
     }
 
     return {
@@ -203,7 +201,7 @@ export default function CourseMall({ courses, currentUser, onSelectCourse, onLea
                     <div 
                       onClick={() => onSelectCourse(c)}
                       style={{
-                        backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(0,0,0,0.7)), url(${getCourseImage(c.id)})`,
+                        backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(0,0,0,0.7)), url(${getCourseImage(c)})`,
                         backgroundSize: 'cover',
                         backgroundPosition: 'center',
                         height: '130px',
@@ -426,7 +424,7 @@ export default function CourseMall({ courses, currentUser, onSelectCourse, onLea
                     <div 
                       onClick={() => onSelectCourse(c)}
                       style={{
-                        backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.6)), url(${getCourseImage(c.id)})`,
+                        backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.6)), url(${getCourseImage(c)})`,
                         backgroundSize: 'cover',
                         backgroundPosition: 'center',
                         height: '140px',

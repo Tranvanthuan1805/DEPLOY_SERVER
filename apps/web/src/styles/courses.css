@@ -227,7 +227,7 @@
 .cf-bar {
   background: var(--cream-card);
   border: 1.5px solid var(--border-warm);
-  border-radius: var(--radius-lg);
+  border-radius: 24px;
   padding: 28px;
   display: flex;
   flex-direction: column;
@@ -271,7 +271,7 @@
 .cf-search-input {
   width: 100%;
   padding: 12px 16px 12px 48px;
-  border-radius: 12px;
+  border-radius: 20px;
   border: 1.5px solid var(--border-warm);
   background: #ffffff;
   color: var(--stone-text-main);
@@ -1784,7 +1784,7 @@
   padding: 11px 36px 11px 16px;
   font-size: 14px;
   font-weight: 700;
-  border-radius: 12px;
+  border-radius: 20px;
   border-width: 1.5px;
   border-style: solid;
   cursor: pointer;
@@ -1852,7 +1852,7 @@
   padding: 11px 36px 11px 16px;
   font-size: 14px;
   font-weight: 700;
-  border-radius: 12px;
+  border-radius: 20px;
   border: 1.5px solid var(--border-warm);
   background-color: #ffffff;
   color: var(--stone-text-main);

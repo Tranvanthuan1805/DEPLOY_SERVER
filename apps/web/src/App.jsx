@@ -29,7 +29,7 @@ import ContributionHeatmap from './components/ContributionHeatmap';
 
 import CoursesPage from './pages/CoursesPage';
 import CourseDetailPage from './pages/CourseDetailPage';
-import { MOCK_COURSES } from './data/courses';
+import { mapDbCourseToMockFormat } from './utils/courseMapper';
 import LearningPage from './pages/LearningPage';
 import MockExamsPage from './pages/MockExamsPage';
 import MockExamDetailPage from './pages/MockExamDetailPage';
@@ -51,20 +51,7 @@ import ConfirmEmailPage from './pages/ConfirmEmailPage';
 import { HiPlay, HiDocumentDownload, HiBeaker, HiX, HiBookOpen } from 'react-icons/hi';
 import { api } from './api';
 
-const initialCourses = MOCK_COURSES.map(c => ({
-  ...c,
-  id: Number(c.id),
-  title: c.title,
-  subject: c.subject === 'Toán' ? 'Toán học' : c.subject,
-  price: c.priceSale ? (c.priceSale / 1000).toFixed(3) : "499.000",
-  teacherName: c.instructor?.name || 'Thầy Thế Anh',
-  isUnlocked: false,
-  lessons: c.curriculum?.flatMap(chap => chap.lessons.map(l => ({
-    id: Number(l.id),
-    name: l.title,
-    duration: `${l.durationMin}:00`
-  }))) || []
-}));
+
 
 const initialUsers = [
   {
@@ -1113,16 +1100,7 @@ export default function App() {
     }
     return list;
   });
-  const [courses, setCourses] = useState(() => {
-    const stored = localStorage.getItem('app_courses');
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.length === 12) {
-        return parsed;
-      }
-    }
-    return initialCourses;
-  });
+  const [courses, setCourses] = useState([]);
   const [examsList, setExamsList] = useState([]);
   const [attemptsHistory, setAttemptsHistory] = useState([]);
   const [questionBank, setQuestionBank] = useState(() => JSON.parse(localStorage.getItem('app_questions')) || initialQuestions);
@@ -1432,15 +1410,7 @@ export default function App() {
       // 1. Fetch courses from backend
       const backendCourses = await api.getCourses();
       if (backendCourses && backendCourses.length > 0) {
-        const mapped = backendCourses.map(c => ({
-          id: c.id,
-          title: c.title,
-          description: c.description,
-          subject: c.subject,
-          price: c.price.toLocaleString(),
-          teacherName: c.teacher?.user?.fullName || 'Giáo viên',
-          lessons: c.lessons || []
-        }));
+        const mapped = backendCourses.map(c => mapDbCourseToMockFormat(c));
         setCourses(mapped);
       }
     } catch (err) {
@@ -1501,6 +1471,21 @@ export default function App() {
   useEffect(() => {
     fetchInitialData();
   }, [currentUser, activeTab]);
+
+  useEffect(() => {
+    const loadCourses = async () => {
+      try {
+        const backendCourses = await api.getCourses();
+        if (backendCourses && backendCourses.length > 0) {
+          const mapped = backendCourses.map(c => mapDbCourseToMockFormat(c));
+          setCourses(mapped);
+        }
+      } catch (err) {
+        console.warn('[App] Không thể fetch courses on mount:', err);
+      }
+    };
+    loadCourses();
+  }, []);
 
   useEffect(() => {
     if (activeTab === 'tests') {
@@ -1858,7 +1843,7 @@ export default function App() {
 
   // Filter dynamic list of course purchases for current user session
   const activeUserCourses = courses.map(c => {
-    const isUnlocked = c.id === 1 || currentUser?.unlockedCourses?.includes(c.id);
+    const isUnlocked = c.priceSale === 0 || currentUser?.unlockedCourses?.includes(Number(c.id)) || currentUser?.unlockedCourses?.includes(c.id.toString());
     return { ...c, isUnlocked };
   });
 
@@ -2013,6 +1998,7 @@ export default function App() {
                 />
               ) : (
                 <LandingPage
+                  courses={courses}
                   currentUser={currentUser}
                   onNavigateToAuth={(mode) => setActiveTab(mode)}
                   onBackToDashboard={handleBackToDashboard}
@@ -2116,6 +2102,7 @@ export default function App() {
                   </div>
                 ) : (
                   <CoursesPage
+                    courses={courses}
                     currentUser={currentUser}
                     onSelectCourse={(course) => navigateTo(`/courses/${course.id}`)}
                     onCheckoutCourse={(course) => setCheckoutCourse(course)}
