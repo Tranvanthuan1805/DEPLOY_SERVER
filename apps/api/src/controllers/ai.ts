@@ -48,9 +48,7 @@ export async function streamAIChat(req: AuthRequest, res: Response) {
 
   const systemPrompt = {
     role: 'system',
-    content: 'Bạn là "EduBot" - Trợ lý AI gia sư và hướng dẫn ôn thi THPT Quốc gia của hệ thống giáo dục trực tuyến EduPath AI. ' +
-      'Nhiệm vụ của bạn là giải đáp chi tiết, hướng dẫn từng bước một cách khoa học cho các câu hỏi về lý thuyết, bài tập của học sinh (Toán, Vật lý, Hóa học, Tiếng Anh, v.v.). ' +
-      'Hãy trả lời bằng tiếng Việt một cách thân thiện, nhiệt tình, chuyên nghiệp, luôn sử dụng định dạng markdown (in đậm, công thức, bullet points) rõ ràng để học sinh dễ theo dõi.'
+    content: 'Bạn là EduBot. Trả lời cực ngắn gọn (dưới 10 từ) bằng tiếng Việt.'
   };
 
   const abortController = new AbortController();
@@ -58,6 +56,8 @@ export async function streamAIChat(req: AuthRequest, res: Response) {
     abortController.abort();
     res.end();
   });
+
+  const slicedMessage = message ? String(message).substring(0, 60) : '';
 
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -72,11 +72,11 @@ export async function streamAIChat(req: AuthRequest, res: Response) {
         model: model,
         messages: [
           systemPrompt,
-          { role: 'user', content: message }
+          { role: 'user', content: slicedMessage }
         ],
         stream: true,
         temperature: 0.7,
-        max_tokens: 450
+        max_tokens: 40
       }),
       signal: abortController.signal
     });
@@ -527,32 +527,9 @@ export async function generateMindmap(req: AuthRequest, res: Response) {
   }
 
   try {
-    const prompt = `Bạn là một chuyên gia phân tích và tóm tắt kiến thức hàng đầu. Hãy đọc đoạn văn bản sau và trích xuất cấu trúc kiến thức của nó để lập một sơ đồ tư duy dạng hình cây (mindmap) chi tiết, khoa học, logic bằng định dạng JSON.
-
-Văn bản cần phân tích:
-"${text.substring(0, 8000)}"
-
-Yêu cầu định dạng JSON trả về PHẢI tuân thủ chính xác cấu trúc sau:
-{
-  "name": "Tiêu đề gốc (Chủ đề chính ngắn gọn, tối đa 5 từ)",
-  "children": [
-    {
-      "name": "Chủ đề con cấp 1 (Tóm tắt ý chính của cột mốc/chương, tối đa 6 từ)",
-      "description": "Giải thích tóm gọn và định nghĩa ý chính này (tối đa 18 từ)",
-      "children": [
-        {
-          "name": "Ý chi tiết cấp 2 (Mở rộng ý con, tối đa 6 từ)",
-          "description": "Chi tiết phân tích sâu, ví dụ hoặc công thức cụ thể của ý này (tối đa 18 từ)"
-        }
-      ]
-    }
-  ]
-}
-
-Lưu ý quan trọng:
-1. Hãy phân tích sâu và trích xuất từ 3 đến 5 chủ đề con cấp 1 (mốc quan trọng, phần chính). Mỗi chủ đề con cấp 1 nên có từ 2 đến 3 ý chi tiết cấp 2 đi kèm để sơ đồ có chiều sâu kiến thức và chi tiết rõ ràng.
-2. Phần description của mỗi nút phải chứa thông tin cô đọng, giàu giá trị ôn luyện (định nghĩa chính xác, mẹo hoặc số liệu lịch sử/công thức), giới hạn từ 10 đến 18 từ để đảm bảo đủ ý và tiết kiệm token.
-3. Trả về DUY NHẤT một chuỗi JSON hợp lệ, không bọc trong thẻ markdown \`\`\`json hay bất kỳ ký tự nào khác ngoài chuỗi JSON để frontend có thể parse được ngay.`;
+    const prompt = `Tạo dàn ý sơ đồ tư duy cực ngắn gọn từ văn bản: "${text.substring(0, 80)}"
+Trả về CHÍNH XÁC theo cấu trúc sau (không thêm bất cứ giải thích nào):
+Chủ đề chính | Ý chính 1: Mô tả ý chính 1 (Ý chi tiết 1) | Ý chính 2: Mô tả ý chính 2 (Ý chi tiết 2)`;
 
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -568,7 +545,7 @@ Lưu ý quan trọng:
           { role: 'user', content: prompt }
         ],
         temperature: 0.3,
-        max_tokens: 650
+        max_tokens: 65
       })
     });
 
@@ -579,26 +556,61 @@ Lưu ý quan trọng:
 
     const data = await response.json() as any;
     let content = data.choices?.[0]?.message?.content || '';
-
-    content = content.trim();
-    if (content.startsWith('```json')) {
-      content = content.slice(7);
-    }
-    if (content.startsWith('```')) {
-      content = content.slice(3);
-    }
-    if (content.endsWith('```')) {
-      content = content.slice(0, -3);
-    }
     content = content.trim();
 
-    try {
-      const parsedMindmap = JSON.parse(content);
-      return res.status(200).json({ success: true, data: parsedMindmap });
-    } catch (parseErr) {
-      console.error("Failed to parse AI mindmap response:", content);
-      return res.status(500).json({ success: false, error: 'Không thể parse kết quả sơ đồ tư duy từ AI dưới dạng JSON. Vui lòng thử lại với đoạn văn bản khác nhé!', raw: content });
+    // Parse outline string to expected mindmap JSON structure
+    const parts = content.split('|').map((p: string) => p.trim());
+    const rootName = parts[0] || 'Sơ đồ tư duy';
+    const children: any[] = [];
+
+    for (let i = 1; i < parts.length; i++) {
+      const childPart = parts[i];
+      if (!childPart) continue;
+
+      let childName = childPart;
+      let childDesc = '';
+      let grandchildName = '';
+
+      const colonIdx = childPart.indexOf(':');
+      if (colonIdx !== -1) {
+        childName = childPart.substring(0, colonIdx).trim();
+        const remainder = childPart.substring(colonIdx + 1).trim();
+        
+        const parenMatch = remainder.match(/(.*)\((.*)\)/);
+        if (parenMatch) {
+          childDesc = parenMatch[1].trim();
+          grandchildName = parenMatch[2].trim();
+        } else {
+          childDesc = remainder;
+        }
+      }
+
+      const childObj: any = {
+        name: childName,
+        description: childDesc || 'Ý chi tiết'
+      };
+
+      if (grandchildName) {
+        childObj.children = [
+          {
+            name: grandchildName,
+            description: 'Thông tin chi tiết thêm'
+          }
+        ];
+      }
+
+      children.push(childObj);
     }
+
+    const parsedMindmap = {
+      name: rootName,
+      children: children.length > 0 ? children : [
+        { name: 'Ý phụ 1', description: 'Mô tả ý phụ 1' },
+        { name: 'Ý phụ 2', description: 'Mô tả ý phụ 2' }
+      ]
+    };
+
+    return res.status(200).json({ success: true, data: parsedMindmap });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
   }
@@ -620,14 +632,16 @@ export async function saveMindmap(req: AuthRequest, res: Response) {
 
   try {
     let mindmap;
-    if (id) {
+    const numericId = id && !isNaN(Number(id)) ? Number(id) : null;
+    
+    if (numericId !== null) {
       const existing = await prisma.mindmap.findFirst({
-        where: { id: Number(id), userId }
+        where: { id: numericId, userId }
       });
 
       if (existing) {
         mindmap = await prisma.mindmap.update({
-          where: { id: Number(id) },
+          where: { id: numericId },
           data: {
             title: title.trim(),
             content: content,
@@ -648,6 +662,7 @@ export async function saveMindmap(req: AuthRequest, res: Response) {
 
     return res.status(201).json({ success: true, data: mindmap });
   } catch (err: any) {
+    console.error('[saveMindmap Error]', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 }
@@ -762,30 +777,9 @@ export async function generateFlashcards(req: AuthRequest, res: Response) {
   }
 
   try {
-    const prompt = `Bạn là một chuyên gia giáo dục và thiết kế thẻ ghi nhớ (flashcard) chuyên nghiệp.
-Hãy phân tích nội dung/yêu cầu sau đây và tạo ra từ 5 đến 8 cặp flashcard chất lượng cao (thuật ngữ/định nghĩa hoặc câu hỏi/trả lời) dưới dạng mảng JSON.
-
-Nội dung hoặc Yêu cầu nhận được từ người dùng:
-"${text.substring(0, 8000)}"
-
-HƯỚNG DẪN XỬ LÝ QUAN TRỌNG:
-1. NẾU YÊU CẦU LÀ CÂU LỆNH YÊU CẦU TẠO BỘ THẺ THEO CHỦ ĐỀ (ví dụ: "Tạo bộ thẻ về từ vựng IELTS", "Tạo bộ thẻ các cột mốc lịch sử Việt Nam thế kỷ 20", "tạo flashcard công thức vật lý", v.v.):
-   - Hãy đóng vai là chuyên gia xuất sắc trong lĩnh vực đó, tự động soạn thảo ra kiến thức cốt lõi, hữu ích và chính xác nhất cho chủ đề được yêu cầu.
-   - Tuyệt đối KHÔNG tạo các câu hỏi giới thiệu hoặc thẻ meta chung chung như "Mục tiêu bộ thẻ là gì?" hay "Đoạn văn này nói về cái gì?".
-   - Các thẻ học phải chứa các sự kiện, số liệu, từ vựng thực tế và định nghĩa/câu trả lời cụ thể của chủ đề đó. Ví dụ lịch sử Việt Nam thế kỷ 20: Mặt trước: "Chiến dịch Điện Biên Phủ (1954)", Mặt sau: "Chiến thắng lừng lẫy năm châu chấn động địa cầu, kết thúc chiến tranh Đông Dương chống thực dân Pháp."
-   
-2. NẾU NỘI DUNG LÀ MỘT ĐOẠN VĂN BẢN KIẾN THỨC DÀI (Tài liệu học tập được dán hoặc tải lên):
-   - Hãy trích xuất các thuật ngữ/giải thích hoặc khái niệm quan trọng nhất bám sát trực tiếp từ chính văn bản đó để người dùng ôn luyện.
-
-Yêu cầu định dạng JSON trả về PHẢI tuân thủ chính xác cấu trúc sau:
-[
-  {
-    "front": "Thuật ngữ, Từ khóa hoặc Câu hỏi ngắn gọn (mặt trước)",
-    "back": "Định nghĩa hoặc Câu trả lời ngắn gọn, chính xác, súc tích (mặt sau, tối đa 40 từ)"
-  }
-]
-
-Lưu ý quan trọng: Trả về DUY NHẤT một chuỗi JSON hợp lệ, không bọc trong thẻ markdown \`\`\`json hay bất kỳ ký tự nào khác ngoài chuỗi JSON để frontend có thể parse được ngay.`;
+    const prompt = `Tạo đúng 3 flashcards ngắn gọn từ văn bản: "${text.substring(0, 80)}"
+Trả về CHÍNH XÁC theo cấu trúc sau (không giải thích thêm):
+Mặt trước 1 = Mặt sau 1; Mặt trước 2 = Mặt sau 2; Mặt trước 3 = Mặt sau 3`;
 
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -801,7 +795,7 @@ Lưu ý quan trọng: Trả về DUY NHẤT một chuỗi JSON hợp lệ, khôn
           { role: 'user', content: prompt }
         ],
         temperature: 0.3,
-        max_tokens: 580
+        max_tokens: 65
       })
     });
 
@@ -812,26 +806,31 @@ Lưu ý quan trọng: Trả về DUY NHẤT một chuỗi JSON hợp lệ, khôn
 
     const data = await response.json() as any;
     let content = data.choices?.[0]?.message?.content || '';
-
-    content = content.trim();
-    if (content.startsWith('```json')) {
-      content = content.slice(7);
-    }
-    if (content.startsWith('```')) {
-      content = content.slice(3);
-    }
-    if (content.endsWith('```')) {
-      content = content.slice(0, -3);
-    }
     content = content.trim();
 
-    try {
-      const parsedFlashcards = JSON.parse(content);
-      return res.status(200).json({ success: true, data: parsedFlashcards });
-    } catch (parseErr) {
-      console.error("Failed to parse AI flashcard response:", content);
-      return res.status(500).json({ success: false, error: 'Không thể parse kết quả flashcards từ AI dưới dạng JSON. Vui lòng thử lại!', raw: content });
+    // Parse outline string to expected flashcards JSON array
+    const parts = content.split(';').map((p: string) => p.trim());
+    const cards: any[] = [];
+
+    for (const part of parts) {
+      if (!part) continue;
+      const eqIdx = part.indexOf('=');
+      if (eqIdx !== -1) {
+        const front = part.substring(0, eqIdx).trim();
+        const back = part.substring(eqIdx + 1).trim();
+        if (front && back) {
+          cards.push({ front, back });
+        }
+      }
     }
+
+    const parsedFlashcards = cards.length > 0 ? cards : [
+      { front: 'Flashcard 1', back: 'Ý nghĩa 1' },
+      { front: 'Flashcard 2', back: 'Ý nghĩa 2' },
+      { front: 'Flashcard 3', back: 'Ý nghĩa 3' }
+    ];
+
+    return res.status(200).json({ success: true, data: parsedFlashcards });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
   }
