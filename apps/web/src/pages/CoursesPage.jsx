@@ -3,7 +3,6 @@ import { HiStar, HiSparkles } from 'react-icons/hi';
 import CourseCard from '../components/courses/CourseCard';
 import CourseFilter from '../components/courses/CourseFilter';
 import useCourseFilters from '../hooks/useCourseFilters';
-import { MOCK_COURSES } from '../data/courses';
 
 const STATS = [
   { value: '50.000+', label: 'Học viên tin tưởng', icon: '👨‍🎓' },
@@ -26,7 +25,7 @@ function SkeletonCard() {
   );
 }
 
-export default function CoursesPage({ currentUser, onSelectCourse, onCheckoutCourse }) {
+export default function CoursesPage({ courses, currentUser, onSelectCourse, onCheckoutCourse }) {
   const {
     search,
     setSearch,
@@ -43,6 +42,7 @@ export default function CoursesPage({ currentUser, onSelectCourse, onCheckoutCou
   } = useCourseFilters();
 
   const [badgeFilter, setBadgeFilter] = useState('All');
+  const coursesList = courses || [];
   const [loading, setLoading] = useState(true);
 
   // Simulate shimmer loading on filter/page transitions
@@ -56,7 +56,7 @@ export default function CoursesPage({ currentUser, onSelectCourse, onCheckoutCou
 
   // Combine filters in memory from standard database courses list
   const filteredCourses = useMemo(() => {
-    let result = [...MOCK_COURSES];
+    let result = [...coursesList];
     const q = debouncedSearch.trim().toLowerCase();
 
     if (q) {
@@ -72,7 +72,11 @@ export default function CoursesPage({ currentUser, onSelectCourse, onCheckoutCou
     }
 
     if (block !== 'All') {
-      result = result.filter(c => c.block === block);
+      result = result.filter(c => {
+        if (!c.block) return false;
+        const blockName = block.replace("Khối ", "").trim();
+        return c.block.includes(blockName);
+      });
     }
 
     if (level !== 'All') {
@@ -80,7 +84,11 @@ export default function CoursesPage({ currentUser, onSelectCourse, onCheckoutCou
     }
 
     if (badgeFilter !== 'All') {
-      result = result.filter(c => c.badge?.toUpperCase() === badgeFilter.toUpperCase());
+      if (badgeFilter === 'MIỄN PHÍ') {
+        result = result.filter(c => c.badge?.toUpperCase() === 'MIỄN PHÍ' || c.priceSale === 0 || c.priceOriginal === 0);
+      } else {
+        result = result.filter(c => c.badge?.toUpperCase() === badgeFilter.toUpperCase());
+      }
     }
 
     // Sort operations
@@ -97,7 +105,7 @@ export default function CoursesPage({ currentUser, onSelectCourse, onCheckoutCou
     }
 
     return result;
-  }, [debouncedSearch, subject, block, level, sortBy, badgeFilter]);
+  }, [coursesList, debouncedSearch, subject, block, level, sortBy, badgeFilter]);
 
   const handleClearFilters = () => {
     clearFilters();

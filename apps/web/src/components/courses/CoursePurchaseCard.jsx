@@ -140,6 +140,32 @@ export default function CoursePurchaseCard({ course, isOwned, onEnroll }) {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
             <button
+              className="cc-btn cc-btn--enroll"
+              style={{
+                width: '100%',
+                padding: '14px',
+                fontSize: '14.5px',
+                fontWeight: '800',
+                borderRadius: '12px',
+                background: 'linear-gradient(135deg, var(--emerald-primary), var(--emerald-hover))',
+                boxShadow: '0 4px 14px rgba(5, 150, 105, 0.25)',
+                border: 'none',
+                color: '#ffffff',
+                cursor: 'pointer',
+                transition: 'transform 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}
+              onClick={() => onEnroll('buy')}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; }}
+            >
+              {priceSale === 0 ? 'ĐĂNG KÝ HỌC MIỄN PHÍ' : 'ĐĂNG KÝ HỌC NGAY'}
+            </button>
+
+            <button
               className="cc-btn cc-btn--demo"
               style={{
                 width: '100%',

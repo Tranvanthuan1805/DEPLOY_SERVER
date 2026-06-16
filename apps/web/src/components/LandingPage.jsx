@@ -624,6 +624,7 @@ function CourseCard({ course, currentUser, onBackToDashboard, onNavigateToAuth }
 }
 
 export default function LandingPage({ 
+  courses = [],
   currentUser, 
   onNavigateToAuth, 
   onBackToDashboard, 
@@ -1056,7 +1057,10 @@ export default function LandingPage({
 
   const handleApplyPromoCode = () => {
     const code = pricingPromoCode.trim().toUpperCase();
-    if (code === 'EDUPATH2026' || code === 'THPT2026' || code === 'KHUYENMAI20') {
+    if (code === 'FREE100') {
+      setPricingPromoStatus('success');
+      setPricingDiscountPercent(100);
+    } else if (code === 'EDUPATH2026' || code === 'THPT2026' || code === 'KHUYENMAI20') {
       setPricingPromoStatus('success');
       setPricingDiscountPercent(20);
     } else {
@@ -2104,6 +2108,7 @@ export default function LandingPage({
               />
             ) : (
               <CoursesPage
+                courses={courses}
                 currentUser={currentUser}
                 onSelectCourse={(course) => setSelectedCourseId(course.id)}
                 onCheckoutCourse={onCheckoutCourse}
@@ -2419,7 +2424,7 @@ export default function LandingPage({
                 </div>
                 {pricingPromoStatus === 'success' && (
                   <p style={{ margin: '0', fontSize: '12px', color: '#22c55e', fontWeight: 'bold' }}>
-                    ✅ Áp dụng mã giảm giá thành công! Giảm ngay 20% học phí trọn gói.
+                    ✅ Áp dụng mã giảm giá thành công! Giảm ngay {pricingDiscountPercent}% học phí trọn gói.
                   </p>
                 )}
                 {pricingPromoStatus === 'invalid' && (

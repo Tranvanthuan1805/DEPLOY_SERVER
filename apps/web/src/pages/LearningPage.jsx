@@ -7,7 +7,8 @@ import CourseDiscussion from '../components/courses/CourseDiscussion';
 import TeacherChat from '../components/courses/TeacherChat';
 import AiTutorChat from '../components/courses/AiTutorChat';
 import useCourseProgress from '../hooks/useCourseProgress';
-import { MOCK_COURSES } from '../data/courses';
+import { mapDbCourseToMockFormat } from '../utils/courseMapper';
+import { api } from '../api';
 import { discussionService } from '../services/discussionService';
 import { aiService } from '../services/aiService';
 
@@ -104,10 +105,23 @@ export default function LearningPage({ courseId, lessonId, currentUser, onSelect
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [aiMessages, aiTyping]);
 
-  // 1. Locate Course
+  // 1. Fetch Course from API
   useEffect(() => {
-    const found = MOCK_COURSES.find(c => c.id.toString() === courseId?.toString());
-    setCourse(found || null);
+    const fetchCourse = async () => {
+      try {
+        const data = await api.getCourseById(courseId);
+        if (data) {
+          const found = mapDbCourseToMockFormat(data);
+          setCourse(found);
+        } else {
+          setCourse(null);
+        }
+      } catch (err) {
+        console.error('Failed to fetch course in LearningPage:', err);
+        setCourse(null);
+      }
+    };
+    fetchCourse();
   }, [courseId]);
 
   // Flattened list of lessons for linear navigation

@@ -4,7 +4,8 @@ import { HiStar, HiUserGroup, HiBookOpen, HiClock, HiCheck, HiChevronRight, HiAc
 import CurriculumAccordion from '../components/courses/CurriculumAccordion';
 import CourseReviews from '../components/courses/CourseReviews';
 import CoursePurchaseCard from '../components/courses/CoursePurchaseCard';
-import { MOCK_COURSES } from '../data/courses';
+import { mapDbCourseToMockFormat } from '../utils/courseMapper';
+import { api } from '../api';
 import { enrollmentService } from '../services/enrollmentService';
 
 export default function CourseDetailPage({ courseId, currentUser, onNavigateToLearn, onUpdateUser, navigateTo, onAddToCart, onCheckoutCourse }) {
@@ -17,31 +18,50 @@ export default function CourseDetailPage({ courseId, currentUser, onNavigateToLe
 
   useEffect(() => {
     setLoading(true);
-    // Locate course in mock database
-    const foundCourse = MOCK_COURSES.find(c => c.id.toString() === courseId?.toString());
-    setCourse(foundCourse || null);
+    const fetchCourseDetail = async () => {
+      try {
+        const data = await api.getCourseById(courseId);
+        if (data) {
+          const foundCourse = mapDbCourseToMockFormat(data);
+          setCourse(foundCourse);
 
-    if (foundCourse) {
-      // Check ownership
-      const userEnrolled = currentUser?.unlockedCourses?.includes(Number(courseId)) || currentUser?.unlockedCourses?.includes(courseId?.toString());
-      setIsOwned(userEnrolled || false);
+          // Check ownership
+          const userEnrolled = currentUser?.unlockedCourses?.includes(Number(courseId)) || currentUser?.unlockedCourses?.includes(courseId?.toString());
+          setIsOwned(userEnrolled || false);
 
-      // Load progress
-      if (currentUser) {
-        enrollmentService.getEnrolledCourseProgress(currentUser.id, courseId)
-          .then(completed => setCompletedLessons(completed || []))
-          .catch(err => console.warn('Failed loading progress:', err));
-      } else {
-        const saved = localStorage.getItem(`course_${courseId}_completed_lessons`);
-        if (saved) setCompletedLessons(JSON.parse(saved));
+          // Load progress
+          if (currentUser) {
+            enrollmentService.getEnrolledCourseProgress(currentUser.id, courseId)
+              .then(completed => setCompletedLessons(completed || []))
+              .catch(err => console.warn('Failed loading progress:', err));
+          } else {
+            const saved = localStorage.getItem(`course_${courseId}_completed_lessons`);
+            if (saved) setCompletedLessons(JSON.parse(saved));
+          }
+
+          // Load reviews
+          const courseReviews = data.reviews?.map(r => ({
+            id: r.id,
+            course_id: r.courseId,
+            student_id: r.studentId,
+            student_name: r.student?.user?.fullName || "Học sinh",
+            student_avatar: r.student?.user?.avatarUrl || "HS",
+            rating: r.rating,
+            comment: r.comment,
+            created_at: r.createdAt
+          })) || [];
+          setReviews(courseReviews);
+        } else {
+          setCourse(null);
+        }
+      } catch (err) {
+        console.error('Failed to load course details:', err);
+        setCourse(null);
+      } finally {
+        setLoading(false);
       }
-
-      // Load reviews
-      const allReviews = JSON.parse(localStorage.getItem('supabase_mock_reviews')) || [];
-      const courseReviews = allReviews.filter(r => r.course_id === Number(foundCourse.id) || r.course_id.toString() === foundCourse.id);
-      setReviews(courseReviews);
-    }
-    setLoading(false);
+    };
+    fetchCourseDetail();
   }, [courseId, currentUser]);
 
   const handleEnroll = async (action) => {

@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { HiX } from 'react-icons/hi';
 
 const BLOCKS = [
@@ -31,6 +32,7 @@ const LEVELS = [
 
 const BADGES = [
   { value: 'All', label: 'Phân loại (Tất cả)' },
+  { value: 'MIỄN PHÍ', label: 'Miễn phí' },
   { value: 'BÁN CHẠY', label: 'Bán chạy' },
   { value: 'HOT', label: 'Hot' },
   { value: 'ĐỀ XUẤT', label: 'Đề xuất' },
@@ -44,6 +46,103 @@ const SORT_OPTIONS = [
   { value: 'price_desc', label: 'Giá từ cao đến thấp' },
   { value: 'newest', label: 'Mới nhất' },
 ];
+
+function CustomDropdown({ options, value, onChange, colorClass }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const selectedOption = options.find(o => o.value === value) || options[0];
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative', width: '100%' }}>
+      <button
+        type="button"
+        className={colorClass === 'sort' ? 'cf-sort-select' : `cf-custom-select cf-custom-select--${colorClass}`}
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          width: '100%',
+          textAlign: 'left',
+          display: 'block'
+        }}
+      >
+        {selectedOption.label}
+      </button>
+
+      {isOpen && (
+        <ul
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 6px)',
+            left: 0,
+            right: 0,
+            background: '#ffffff',
+            border: '1.5px solid var(--border-warm, #EAE6DF)',
+            borderRadius: '16px',
+            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.08)',
+            padding: '6px',
+            margin: 0,
+            listStyle: 'none',
+            zIndex: 1100,
+            maxHeight: '250px',
+            overflowY: 'auto',
+            animation: 'cpFadeInUp 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards'
+          }}
+        >
+          {options.map((option) => {
+            const isSelected = option.value === value;
+            return (
+              <li
+                key={option.value}
+                onClick={() => {
+                  onChange(option.value);
+                  setIsOpen(false);
+                }}
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: '10px',
+                  fontSize: '13px',
+                  fontWeight: isSelected ? '800' : '600',
+                  color: isSelected 
+                    ? (colorClass === 'purple' ? '#4F46E5' : colorClass === 'green' ? '#059669' : colorClass === 'orange' ? '#D97706' : colorClass === 'blue' ? '#2563EB' : '#57534E')
+                    : '#292524',
+                  background: isSelected 
+                    ? (colorClass === 'purple' ? '#F5F3FF' : colorClass === 'green' ? '#ECFDF5' : colorClass === 'orange' ? '#FEF3C7' : colorClass === 'blue' ? '#EFF6FF' : '#F5F5F4')
+                    : 'transparent',
+                  cursor: 'pointer',
+                  transition: 'background 0.15s, color 0.15s',
+                  marginBottom: '2px',
+                  textAlign: 'left'
+                }}
+                onMouseEnter={(e) => {
+                  if (!isSelected) {
+                    e.currentTarget.style.background = '#FAF9F6';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isSelected) {
+                    e.currentTarget.style.background = 'transparent';
+                  }
+                }}
+              >
+                {option.label}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 export default function CourseFilter({
   search,
@@ -59,6 +158,43 @@ export default function CourseFilter({
   badgeFilter,
   setBadgeFilter,
 }) {
+  // Lấy danh sách môn học động dựa theo khối thi đang chọn
+  const filteredSubjects = useMemo(() => {
+    if (block === 'All') return SUBJECTS;
+
+    const subjectsInBlock = {
+      'Khối A00': ['Toán', 'Vật lý', 'Hóa học'],
+      'Khối A01': ['Toán', 'Vật lý', 'Tiếng Anh'],
+      'Khối B00': ['Toán', 'Hóa học', 'Sinh học'],
+      'Khối C00': ['Ngữ văn', 'Lịch sử', 'Địa lý'],
+      'Khối D01': ['Toán', 'Ngữ văn', 'Tiếng Anh'],
+    };
+
+    const allowed = subjectsInBlock[block] || [];
+    return [
+      { value: 'All', label: 'Môn học (Tất cả)' },
+      ...SUBJECTS.filter(s => allowed.includes(s.value))
+    ];
+  }, [block]);
+
+  // Tự động reset bộ lọc môn học về "Tất cả" nếu môn đang chọn không nằm trong khối mới chọn
+  const handleBlockChange = (newBlock) => {
+    setBlock(newBlock);
+    if (newBlock !== 'All') {
+      const subjectsInBlock = {
+        'Khối A00': ['Toán', 'Vật lý', 'Hóa học'],
+        'Khối A01': ['Toán', 'Vật lý', 'Tiếng Anh'],
+        'Khối B00': ['Toán', 'Hóa học', 'Sinh học'],
+        'Khối C00': ['Ngữ văn', 'Lịch sử', 'Địa lý'],
+        'Khối D01': ['Toán', 'Ngữ văn', 'Tiếng Anh'],
+      };
+      const allowed = subjectsInBlock[newBlock] || [];
+      if (subject !== 'All' && !allowed.includes(subject)) {
+        setSubject('All');
+      }
+    }
+  };
+
   return (
     <div className="cf-bar">
       {/* Row 1: Search input & Sorting */}
@@ -97,63 +233,48 @@ export default function CourseFilter({
           )}
         </div>
 
-        <div className="cf-sort-wrap">
-          <label className="cf-label" style={{ letterSpacing: '1px' }}>SẮP XẾP:</label>
-          <select
-            className="cf-sort-select"
+        <div className="cf-sort-wrap" style={{ minWidth: '240px' }}>
+          <label className="cf-label" style={{ letterSpacing: '1px', whiteSpace: 'nowrap' }}>SẮP XẾP:</label>
+          <CustomDropdown
+            options={SORT_OPTIONS}
             value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-          >
-            {SORT_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
+            onChange={setSortBy}
+            colorClass="sort"
+          />
         </div>
       </div>
 
       <div style={{ height: '1.5px', background: 'var(--border-warm)', margin: '0 0' }} />
 
-      {/* Row 2: Four dropdown selectors styled in a grid */}
+      {/* Row 2: Four custom dropdown selectors styled in a grid */}
       <div className="cf-dropdown-grid">
-        <select
-          className="cf-custom-select cf-custom-select--purple"
+        <CustomDropdown
+          options={BLOCKS}
           value={block}
-          onChange={(e) => setBlock(e.target.value)}
-        >
-          {BLOCKS.map((b) => (
-            <option key={b.value} value={b.value}>{b.label}</option>
-          ))}
-        </select>
+          onChange={handleBlockChange}
+          colorClass="purple"
+        />
 
-        <select
-          className="cf-custom-select cf-custom-select--green"
+        <CustomDropdown
+          options={filteredSubjects}
           value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-        >
-          {SUBJECTS.map((s) => (
-            <option key={s.value} value={s.value}>{s.label}</option>
-          ))}
-        </select>
+          onChange={setSubject}
+          colorClass="green"
+        />
 
-        <select
-          className="cf-custom-select cf-custom-select--orange"
+        <CustomDropdown
+          options={LEVELS}
           value={level}
-          onChange={(e) => setLevel(e.target.value)}
-        >
-          {LEVELS.map((l) => (
-            <option key={l.value} value={l.value}>{l.label}</option>
-          ))}
-        </select>
+          onChange={setLevel}
+          colorClass="orange"
+        />
 
-        <select
-          className="cf-custom-select cf-custom-select--blue"
+        <CustomDropdown
+          options={BADGES}
           value={badgeFilter}
-          onChange={(e) => setBadgeFilter(e.target.value)}
-        >
-          {BADGES.map((bg) => (
-            <option key={bg.value} value={bg.value}>{bg.label}</option>
-          ))}
-        </select>
+          onChange={setBadgeFilter}
+          colorClass="blue"
+        />
       </div>
     </div>
   );
