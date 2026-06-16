@@ -673,6 +673,17 @@ export async function createStudyGroup(req: AuthRequest, res: Response) {
         }
       }
     });
+
+    // Broadcast real-time update to all connected clients
+    const io = getIO();
+    if (io) {
+      io.emit('study_group_created', {
+        ...group,
+        isMember: false,
+        memberCount: 1
+      });
+    }
+
     return res.status(201).json({ success: true, data: group });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });

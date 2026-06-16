@@ -1020,3 +1020,38 @@ export async function reviewRoleChange(req: Request, res: Response) {
     return res.status(500).json({ success: false, error: err.message });
   }
 }
+
+export async function refreshToken(req: Request, res: Response) {
+  const { refreshToken } = req.body;
+
+  if (!refreshToken) {
+    return res.status(400).json({ success: false, error: 'Yêu cầu mã refresh token' });
+  }
+
+  try {
+    const payload = jwt.verify(refreshToken, JWT_REFRESH_SECRET) as { id: number };
+    const user = await prisma.user.findUnique({
+      where: { id: payload.id },
+      include: { student: true, teacher: true }
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'Không tìm thấy người dùng' });
+    }
+
+    if (!user.isActive) {
+      return res.status(403).json({ success: false, error: 'Tài khoản của bạn đã bị khóa!' });
+    }
+
+    const tokens = signTokens({ id: user.id, email: user.email, fullName: user.fullName, role: user.role });
+
+    return res.status(200).json({
+      success: true,
+      data: tokens
+    });
+  } catch (err: any) {
+    console.error('[auth] Refresh token validation failed:', err.message);
+    return res.status(401).json({ success: false, error: 'Mã refresh token không hợp lệ hoặc đã hết hạn!' });
+  }
+}
+

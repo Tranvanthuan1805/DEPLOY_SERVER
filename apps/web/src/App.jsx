@@ -535,11 +535,17 @@ export default function App() {
     const handleAuthRedirect = (e) => {
       setActiveTab(e.detail.mode);
     };
+    const handleAuthLogout = () => {
+      handleLogout();
+      showToast.current?.('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!', 'warning');
+    };
     window.addEventListener('popstate', handlePopState);
     window.addEventListener('edupath-auth-redirect', handleAuthRedirect);
+    window.addEventListener('edupath-auth-logout', handleAuthLogout);
     return () => {
       window.removeEventListener('popstate', handlePopState);
       window.removeEventListener('edupath-auth-redirect', handleAuthRedirect);
+      window.removeEventListener('edupath-auth-logout', handleAuthLogout);
     };
   }, []);
 
@@ -884,6 +890,8 @@ export default function App() {
 
   const handleLogout = () => {
     addLog(`Người dùng "${currentUser?.name}" đăng xuất an toàn khỏi hệ thống`, 'sys');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
     navigateTo('/');
     setCurrentUser(null);
     setRole('guest');

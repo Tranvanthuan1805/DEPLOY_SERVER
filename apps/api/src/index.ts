@@ -2,10 +2,13 @@ import express from 'express';
 import { createServer } from 'http';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { initSocket } from './lib/socket.js';
 import { prisma } from './lib/prisma.js';
+import { upload } from './lib/s3.js';
 
-import { login, logout, sendOtp, resendOtp, verifyOtpRegister, googleAuth, googleCompleteOnboarding, changePassword, forgotPassword, verifyResetOtp, resetPassword, requestRoleChange, getRoleChangeRequests, reviewRoleChange } from './controllers/auth.js';
+import { login, logout, sendOtp, resendOtp, verifyOtpRegister, googleAuth, googleCompleteOnboarding, changePassword, forgotPassword, verifyResetOtp, resetPassword, requestRoleChange, getRoleChangeRequests, reviewRoleChange, refreshToken } from './controllers/auth.js';
 import { getCourses, getCourseById, createCourse, getCourseStats } from './controllers/course.js';
 import { getExams, getExamById, startAttempt, saveAnswer, submitAttempt, getAttempts, getExamQuestionsPublic, getAttemptById, getAttemptResult, getExamHistory, recordViolation, recordExamEvent, getExamEvents, recordViolationDetail, generateAiCoach, createSmartRetake, importExam } from './controllers/exam.js';
 import { streamAIChat, refreshRoadmap, generateAIQuestions, generateMindmap, saveMindmap, getMindmaps, getMindmapById, deleteMindmap, generateFlashcards, getPublicMindmapById } from './controllers/ai.js';
@@ -36,6 +39,10 @@ initSocket(server);
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
 // Strip /api prefix for Vercel routing
 app.use((req, res, next) => {
   if (req.url.startsWith('/api')) {
@@ -61,7 +68,25 @@ app.post('/auth/forgot-password', forgotPassword);
 app.post('/auth/verify-reset-otp', verifyResetOtp);
 app.post('/auth/reset-password', resetPassword);
 app.post('/auth/google/complete-onboarding', googleCompleteOnboarding);
+app.post('/auth/refresh', refreshToken);
 app.post('/auth/change-password', authenticateJWT, changePassword);
+
+// File Upload Route
+app.post('/upload', authenticateJWT, upload.single('file'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ success: false, error: 'Không nhận được tệp tải lên!' });
+  }
+  const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+  return res.status(200).json({
+    success: true,
+    data: {
+      url: fileUrl,
+      filename: req.file.filename,
+      size: req.file.size,
+      mimetype: req.file.mimetype
+    }
+  });
+});
 
 // Role Change Routes
 app.post('/auth/role-change-request', authenticateJWT, requestRoleChange);

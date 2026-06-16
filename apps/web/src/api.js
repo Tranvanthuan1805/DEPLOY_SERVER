@@ -3,10 +3,13 @@ export const API_BASE = import.meta.env.VITE_API_URL ||
     ? 'http://localhost:4000'
     : '/api');
 
+let refreshPromise = null;
+
 async function request(path, options = {}) {
   let token = localStorage.getItem('access_token');
+  const isFormData = options.body instanceof FormData;
   const headers = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
     ...(options.headers || {})
   };
@@ -14,24 +17,69 @@ async function request(path, options = {}) {
   let res = await fetch(`${API_BASE}${path}`, {
     headers,
     ...options,
-    body: options.body ? JSON.stringify(options.body) : undefined
+    body: isFormData ? options.body : (options.body ? JSON.stringify(options.body) : undefined)
   });
 
-  // Handle expired/invalid JWT token by clearing and retrying as guest
+  // Handle expired/invalid JWT token by automatically refreshing it
   if ((res.status === 401 || res.status === 403) && token) {
-    localStorage.removeItem('access_token');
-    // Clear authorization header and retry
-    const retryHeaders = {
-      'Content-Type': 'application/json',
-      ...(options.headers || {})
-    };
-    delete retryHeaders['Authorization'];
-    
-    res = await fetch(`${API_BASE}${path}`, {
-      headers: retryHeaders,
-      ...options,
-      body: options.body ? JSON.stringify(options.body) : undefined
-    });
+    const refreshToken = localStorage.getItem('refresh_token');
+    if (refreshToken) {
+      try {
+        if (!refreshPromise) {
+          refreshPromise = fetch(`${API_BASE}/auth/refresh`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ refreshToken })
+          }).then(async r => {
+            const d = await r.json();
+            if (r.ok && d.success && d.data) {
+              localStorage.setItem('access_token', d.data.accessToken);
+              localStorage.setItem('refresh_token', d.data.refreshToken);
+              return d.data.accessToken;
+            }
+            throw new Error(d.error || 'Refresh failed');
+          }).finally(() => {
+            refreshPromise = null;
+          });
+        }
+
+        const newAccessToken = await refreshPromise;
+
+        // Retry original request with new token
+        const retryHeaders = {
+          ...headers,
+          'Authorization': `Bearer ${newAccessToken}`
+        };
+
+        res = await fetch(`${API_BASE}${path}`, {
+          headers: retryHeaders,
+          ...options,
+          body: isFormData ? options.body : (options.body ? JSON.stringify(options.body) : undefined)
+        });
+
+        if (res.status === 401 || res.status === 403) {
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+          window.dispatchEvent(new CustomEvent('edupath-auth-logout'));
+          const err = new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!');
+          err.status = res.status;
+          throw err;
+        }
+      } catch (refreshErr) {
+        console.error('[api] Silent refresh failed:', refreshErr.message);
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        // Notify application components to clear state and visually logout the user
+        window.dispatchEvent(new CustomEvent('edupath-auth-logout'));
+      }
+    } else {
+      // No refresh token available, logout user immediately
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      window.dispatchEvent(new CustomEvent('edupath-auth-logout'));
+    }
   }
 
   const data = await res.json().catch(() => ({}));
@@ -44,6 +92,12 @@ async function request(path, options = {}) {
 }
 
 export const api = {
+  uploadFile: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return request('/upload', { method: 'POST', body: formData });
+  },
+
   login: (email, password) =>
     request('/login', { method: 'POST', body: { email, password } }),
 

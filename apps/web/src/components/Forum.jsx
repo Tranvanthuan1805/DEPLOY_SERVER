@@ -8,6 +8,53 @@ import {
 import { io } from 'socket.io-client';
 import { api, API_BASE } from '../api';
 
+function stripImages(text) {
+  if (!text) return '';
+  return text.replace(/!\[(.*?)\]\((.*?)\)/g, '[Hình ảnh]');
+}
+
+function renderTextWithImages(text) {
+  if (!text) return null;
+  
+  const regex = /!\[(.*?)\]\((.*?)\)/g;
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+  
+  while ((match = regex.exec(text)) !== null) {
+    const matchIndex = match.index;
+    
+    if (matchIndex > lastIndex) {
+      parts.push(text.substring(lastIndex, matchIndex));
+    }
+    
+    const alt = match[1];
+    const url = match[2];
+    
+    parts.push(
+      <div key={matchIndex} style={{ margin: '10px 0' }}>
+        <img 
+          src={url} 
+          alt={alt || 'Image'} 
+          style={{ maxWidth: '100%', maxHeight: '400px', borderRadius: '8px', border: '1px solid var(--border)', display: 'block' }} 
+        />
+      </div>
+    );
+    
+    lastIndex = regex.lastIndex;
+  }
+  
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+  
+  return parts.length > 0 ? (
+    <div style={{ whiteSpace: 'pre-line' }}>
+      {parts.map((part, index) => part)}
+    </div>
+  ) : text;
+}
+
 export default function Forum({ currentUser }) {
   // Global View Controls
   const [activeTab, setActiveTab] = useState('feed'); // feed, groups, drive, leaderboard
@@ -60,6 +107,7 @@ export default function Forum({ currentUser }) {
   // New Comment / Reply state
   const [commentText, setCommentText] = useState('');
   const [replyTargetId, setReplyTargetId] = useState(null); // Track which comment we are replying to
+  const [submitting, setSubmitting] = useState(false);
 
   // Socket setup
   const socketRef = useRef(null);
@@ -79,6 +127,7 @@ export default function Forum({ currentUser }) {
         if (newComment.parentId) {
           return prev.map(c => {
             if (c.id === newComment.parentId) {
+              if (c.replies?.some(r => r.id === newComment.id)) return c;
               return { ...c, replies: [...(c.replies || []), newComment] };
             }
             return c;
@@ -99,6 +148,11 @@ export default function Forum({ currentUser }) {
         };
         return [...prev, mappedMsg];
       });
+    });
+
+    socketRef.current.on('study_group_created', () => {
+      console.log('[Socket] New study group created, refreshing list...');
+      fetchStudyGroups();
     });
 
     // Fetch initial categories
@@ -210,7 +264,8 @@ export default function Forum({ currentUser }) {
 
   const handleCreateGroupAnnouncement = async (e) => {
     e.preventDefault();
-    if (!newAnnTitle.trim() || !newAnnContent.trim()) return;
+    if (!newAnnTitle.trim() || !newAnnContent.trim() || submitting) return;
+    setSubmitting(true);
     try {
       await api.createGroupAnnouncement(selectedGroup.id, newAnnTitle, newAnnContent);
       setNewAnnTitle('');
@@ -219,12 +274,15 @@ export default function Forum({ currentUser }) {
       toast('Đăng thông báo nhóm thành công!', 'success');
     } catch (err) {
       toast(err.message || 'Lỗi đăng thông báo nhóm!', 'error');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleCreateGroupPost = async (e) => {
     e.preventDefault();
-    if (!newTitle.trim() || !newContent.trim()) return;
+    if (!newTitle.trim() || !newContent.trim() || submitting) return;
+    setSubmitting(true);
     try {
       const postPayload = {
         title: newTitle,
@@ -243,6 +301,8 @@ export default function Forum({ currentUser }) {
       toast('Đăng bài thảo luận vào nhóm thành công!', 'success');
     } catch (err) {
       toast(err.message || 'Lỗi đăng bài viết nhóm!', 'error');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -329,8 +389,8 @@ export default function Forum({ currentUser }) {
 
   const handleCreatePost = async (e) => {
     e.preventDefault();
-    if (!newTitle.trim() || !newContent.trim()) return;
-
+    if (!newTitle.trim() || !newContent.trim() || submitting) return;
+    setSubmitting(true);
     try {
       const parsedTags = newTagsString
         .split(',')
@@ -362,25 +422,109 @@ export default function Forum({ currentUser }) {
       toast('Đăng bài thảo luận thành công!', 'success');
     } catch (err) {
       toast(err.message || 'Đăng bài viết thất bại!', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  const handleUploadImageForPost = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingImage(true);
+    try {
+      const data = await api.uploadFile(file);
+      if (data && data.url) {
+        setNewContent(prev => prev + (prev ? '\n' : '') + `![ảnh](${data.url})`);
+        toast('Tải ảnh lên thành công và đã thêm vào nội dung!', 'success');
+      }
+    } catch (err) {
+      toast(err.message || 'Tải ảnh lên thất bại!', 'error');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handleUploadImageForComment = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingImage(true);
+    try {
+      const data = await api.uploadFile(file);
+      if (data && data.url) {
+        setCommentText(prev => prev + (prev ? ' ' : '') + `![ảnh](${data.url})`);
+        toast('Tải ảnh lên thành công và đã thêm vào bình luận!', 'success');
+      }
+    } catch (err) {
+      toast(err.message || 'Tải ảnh lên thất bại!', 'error');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handlePasteImage = async (e, setContent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        e.preventDefault();
+        const file = items[i].getAsFile();
+        if (!file) continue;
+        
+        setUploadingImage(true);
+        try {
+          const data = await api.uploadFile(file);
+          if (data && data.url) {
+            const markdownImage = `![ảnh](${data.url})`;
+            
+            const textarea = e.target;
+            const start = textarea.selectionStart || 0;
+            const end = textarea.selectionEnd || 0;
+            const text = textarea.value || '';
+            const newText = text.substring(0, start) + markdownImage + text.substring(end);
+            
+            setContent(newText);
+            
+            setTimeout(() => {
+              textarea.focus();
+              const newCursorPos = start + markdownImage.length;
+              textarea.setSelectionRange(newCursorPos, newCursorPos);
+            }, 0);
+            
+            toast('Đã dán và tải ảnh lên thành công!', 'success');
+          }
+        } catch (err) {
+          toast(err.message || 'Tải ảnh từ clipboard thất bại!', 'error');
+        } finally {
+          setUploadingImage(false);
+        }
+        break;
+      }
     }
   };
 
   const handleSendComment = async (e) => {
     e.preventDefault();
-    if (!commentText.trim()) return;
-
+    if (!commentText.trim() || submitting) return;
+    setSubmitting(true);
     try {
       const newComment = await api.createForumComment(selectedPost.id, commentText, replyTargetId);
 
       if (replyTargetId) {
         setComments(prev => prev.map(c => {
           if (c.id === replyTargetId) {
+            if (c.replies?.some(r => r.id === newComment.id)) return c;
             return { ...c, replies: [...(c.replies || []), newComment] };
           }
           return c;
         }));
       } else {
-        setComments(prev => [...prev, newComment]);
+        setComments(prev => {
+          if (prev.some(c => c.id === newComment.id)) return prev;
+          return [...prev, newComment];
+        });
       }
 
       setCommentText('');
@@ -388,6 +532,8 @@ export default function Forum({ currentUser }) {
       fetchGamifyProfile();
     } catch (err) {
       toast(err.message || 'Không thể gửi bình luận!', 'error');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -451,10 +597,12 @@ export default function Forum({ currentUser }) {
 
   const handleCreateStudyGroup = async (e) => {
     e.preventDefault();
+    if (submitting) return;
     const name = e.target.groupName.value;
     const description = e.target.groupDesc.value;
     const isPrivate = e.target.groupPrivate.checked;
 
+    setSubmitting(true);
     try {
       await api.createStudyGroup({ name, description, isPrivate });
       setShowGroupModal(false);
@@ -462,6 +610,8 @@ export default function Forum({ currentUser }) {
       toast('Tạo nhóm học tập thành công!', 'success');
     } catch (err) {
       toast(err.message || 'Tạo nhóm thất bại!', 'error');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -609,8 +759,8 @@ export default function Forum({ currentUser }) {
               </div>
 
               <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '12px' }}>{selectedPost.title}</h2>
-              <div style={{ fontSize: '15px', color: 'var(--text-secondary)', lineHeight: '1.6', whiteSpace: 'pre-line', marginBottom: '20px' }}>
-                {selectedPost.content}
+              <div style={{ fontSize: '15px', color: 'var(--text-secondary)', lineHeight: '1.6', marginBottom: '20px' }}>
+                {renderTextWithImages(selectedPost.content)}
               </div>
 
               {/* Resource Download Attachment widget */}
@@ -706,9 +856,9 @@ export default function Forum({ currentUser }) {
                           </div>
                         </div>
 
-                        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', paddingLeft: '36px', margin: 0 }}>
-                          {c.content}
-                        </p>
+                        <div style={{ fontSize: '13px', color: 'var(--text-secondary)', paddingLeft: '36px', margin: 0 }}>
+                          {renderTextWithImages(c.content)}
+                        </div>
 
                         {/* Nesting replies handler */}
                         <div style={{ paddingLeft: '36px', marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -718,7 +868,7 @@ export default function Forum({ currentUser }) {
                                 <span style={{ fontSize: '11.5px', fontWeight: 'bold' }}>{reply.author}</span>
                                 <span style={{ fontSize: '9px', color: 'var(--text-muted)' }}>{new Date(reply.createdAt).toLocaleTimeString()}</span>
                               </div>
-                              <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', margin: 0 }}>{reply.content}</p>
+                              <div style={{ fontSize: '12.5px', color: 'var(--text-secondary)', margin: 0 }}>{renderTextWithImages(reply.content)}</div>
                             </div>
                           ))}
 
@@ -740,17 +890,30 @@ export default function Forum({ currentUser }) {
                 </div>
 
                 {/* Reply form */}
-                <form onSubmit={handleSendComment} style={{ display: 'flex', gap: '10px' }}>
+                <form onSubmit={handleSendComment} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                   <input
                     type="text"
                     className="form-control"
-                    placeholder={replyTargetId ? "Viết phản hồi của bạn..." : "Giải pháp hoặc ý kiến thảo luận của bạn..."}
+                    placeholder={replyTargetId ? "Viết phản hồi của bạn... (Hỗ trợ Ctrl+V để dán ảnh)" : "Giải pháp hoặc ý kiến thảo luận của bạn... (Hỗ trợ Ctrl+V để dán ảnh)"}
                     value={commentText}
                     onChange={e => setCommentText(e.target.value)}
+                    onPaste={(e) => handlePasteImage(e, setCommentText)}
                     style={{ flex: 1 }}
                     required
                   />
-                  <button type="submit" className="btn-primary" style={{ padding: '8px 16px' }}>Gửi</button>
+                  <label className="btn-outline" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '8px 12px', fontSize: '14px', margin: 0, height: '38px', boxSizing: 'border-box' }} title="Tải ảnh lên">
+                    {uploadingImage ? '⏳' : '📷'}
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleUploadImageForComment} 
+                      disabled={uploadingImage || submitting} 
+                      style={{ display: 'none' }} 
+                    />
+                  </label>
+                  <button type="submit" className="btn-primary" style={{ padding: '8px 16px', height: '38px' }} disabled={submitting}>
+                    {submitting ? 'Gửi...' : 'Gửi'}
+                  </button>
                 </form>
               </div>
             </div>
@@ -892,7 +1055,7 @@ export default function Forum({ currentUser }) {
 
                             <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '8px' }}>{post.title}</h3>
                             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', margin: '0 0 12px 0' }}>
-                              {post.content}
+                              {stripImages(post.content)}
                             </p>
 
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border)', paddingTop: '10px', fontSize: '12px', color: 'var(--text-secondary)' }}>
@@ -997,8 +1160,8 @@ export default function Forum({ currentUser }) {
                               style={{ minHeight: '80px' }}
                               required
                             />
-                            <button type="submit" className="btn-primary" style={{ alignSelf: 'flex-end', padding: '6px 16px' }}>
-                              Phát thông báo
+                            <button type="submit" className="btn-primary" style={{ alignSelf: 'flex-end', padding: '6px 16px' }} disabled={submitting}>
+                              {submitting ? 'Đang phát...' : 'Phát thông báo'}
                             </button>
                           </div>
                         </form>
@@ -1050,16 +1213,30 @@ export default function Forum({ currentUser }) {
                             onChange={e => setNewTitle(e.target.value)}
                             required
                           />
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <label style={{ fontSize: '12.5px', fontWeight: '600', margin: 0 }}>Nội dung thảo luận:</label>
+                            <label className="btn-outline" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer', padding: '4px 10px', fontSize: '11px', margin: 0 }}>
+                              📷 {uploadingImage ? 'Đang tải...' : 'Chèn ảnh'}
+                              <input 
+                                type="file" 
+                                accept="image/*" 
+                                onChange={handleUploadImageForPost} 
+                                disabled={uploadingImage} 
+                                style={{ display: 'none' }} 
+                              />
+                            </label>
+                          </div>
                           <textarea 
                             className="form-control" 
-                            placeholder="Nội dung thảo luận..." 
+                            placeholder="Nội dung thảo luận... (Hỗ trợ Ctrl+V để dán ảnh từ clipboard)" 
                             value={newContent}
+                            onPaste={(e) => handlePasteImage(e, setNewContent)}
                             onChange={e => setNewContent(e.target.value)}
                             style={{ minHeight: '80px' }}
                             required
                           />
-                          <button type="submit" className="btn-primary" style={{ alignSelf: 'flex-end', padding: '6px 16px' }}>
-                            Đăng thảo luận
+                          <button type="submit" className="btn-primary" style={{ alignSelf: 'flex-end', padding: '6px 16px' }} disabled={submitting}>
+                            {submitting ? 'Đang đăng...' : 'Đăng thảo luận'}
                           </button>
                         </div>
                       </form>
@@ -1079,7 +1256,7 @@ export default function Forum({ currentUser }) {
                                 <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{new Date(post.createdAt).toLocaleDateString()}</span>
                               </div>
                               <h4 style={{ fontWeight: 'bold', fontSize: '14.5px', marginBottom: '6px' }}>{post.title}</h4>
-                              <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', margin: '0 0 10px 0', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{post.content}</p>
+                              <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', margin: '0 0 10px 0', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{stripImages(post.content)}</p>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', color: 'var(--text-muted)' }}>
                                 <span>Tác giả: {post.author?.fullName}</span>
                                 <span>💬 {post.comments?.length || 0} bình luận</span>
@@ -1425,13 +1602,27 @@ export default function Forum({ currentUser }) {
               </div>
 
               <div className="form-group">
-                <label style={{ fontSize: '12px', fontWeight: '600', marginBottom: '6px', display: 'block' }}>Nội dung chi tiết câu hỏi:</label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: '600', margin: 0 }}>Nội dung chi tiết câu hỏi:</label>
+                  <label className="btn-outline" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer', padding: '4px 10px', fontSize: '11px', margin: 0 }}>
+                    📷 {uploadingImage ? 'Đang tải...' : 'Chèn ảnh'}
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleUploadImageForPost} 
+                      disabled={uploadingImage} 
+                      style={{ display: 'none' }} 
+                    />
+                  </label>
+                </div>
                 <textarea 
-                  className="form-control" placeholder="Nhập nội dung chi tiết bài toán, bạn đã thử cách nào..."
-                  value={newContent} onChange={e => setNewContent(e.target.value)} style={{ width: '100%', minHeight: '120px', resize: 'vertical' }} required
+                  className="form-control" placeholder="Nhập nội dung chi tiết bài toán, bạn đã thử cách nào... (Hỗ trợ Ctrl+V để dán ảnh từ clipboard)"
+                  value={newContent} onChange={e => setNewContent(e.target.value)} 
+                  onPaste={(e) => handlePasteImage(e, setNewContent)}
+                  style={{ width: '100%', minHeight: '120px', resize: 'vertical' }} required
                 />
               </div>
-
+ 
               <div className="form-group">
                 <label style={{ fontSize: '12px', fontWeight: '600', marginBottom: '6px', display: 'block' }}>Thẻ phân loại (ngăn cách bởi dấu phẩy):</label>
                 <input 
@@ -1439,10 +1630,12 @@ export default function Forum({ currentUser }) {
                   value={newTagsString} onChange={e => setNewTagsString(e.target.value)} style={{ width: '100%' }}
                 />
               </div>
-
+ 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
-                <button type="button" className="btn-outline" onClick={() => setShowCreateModal(false)}>Hủy bỏ</button>
-                <button type="submit" className="btn-primary">Đăng lên diễn đàn</button>
+                <button type="button" className="btn-outline" onClick={() => setShowCreateModal(false)} disabled={submitting}>Hủy bỏ</button>
+                <button type="submit" className="btn-primary" disabled={submitting}>
+                  {submitting ? 'Đang đăng...' : 'Đăng lên diễn đàn'}
+                </button>
               </div>
             </form>
           </div>
@@ -1475,8 +1668,10 @@ export default function Forum({ currentUser }) {
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
-                <button type="button" className="btn-outline" onClick={() => setShowGroupModal(false)}>Hủy bỏ</button>
-                <button type="submit" className="btn-primary">Tạo nhóm</button>
+                <button type="button" className="btn-outline" onClick={() => setShowGroupModal(false)} disabled={submitting}>Hủy bỏ</button>
+                <button type="submit" className="btn-primary" disabled={submitting}>
+                  {submitting ? 'Đang tạo...' : 'Tạo nhóm'}
+                </button>
               </div>
             </form>
           </div>
