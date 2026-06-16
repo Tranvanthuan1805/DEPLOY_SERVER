@@ -3,6 +3,8 @@ import { createServer } from 'http';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { initSocket } from './lib/socket.js';
+import { prisma } from './lib/prisma.js';
+
 
 // Controller imports
 import {
@@ -148,4 +150,39 @@ if (!process.env.VERCEL) {
   });
 }
 
+async function seedDefaultCategories() {
+  try {
+    const count = await prisma.forumCategory.count();
+    if (count === 0) {
+      console.log('[Seed] Seeding default forum categories...');
+      const defaultCategories = [
+        { name: 'Toán học', slug: 'toan-hoc', description: 'Thảo luận và học hỏi kiến thức môn Toán học THPTQG' },
+        { name: 'Vật lý', slug: 'vat-ly', description: 'Trao đổi lời giải bài tập Vật lý và đề thi thử' },
+        { name: 'Hóa học', slug: 'hoa-hoc', description: 'Góc học tập môn Hóa học lớp 10, 11, 12' },
+        { name: 'Tiếng Anh', slug: 'tieng-anh', description: 'Chia sẻ từ vựng, ngữ pháp và đề thi mẫu THPTQG' },
+        { name: 'Sinh học', slug: 'sinh-hoc', description: 'Nơi thảo luận về môn Sinh học và kiến thức liên quan' },
+        { name: 'Thảo luận chung', slug: 'thao-luan-chung', description: 'Chia sẻ kinh nghiệm thi cử, phương pháp học tập chung' }
+      ];
+
+      for (const cat of defaultCategories) {
+        await prisma.forumCategory.create({
+          data: {
+            name: cat.name,
+            slug: cat.slug,
+            description: cat.description,
+            allowedRoles: ['STUDENT', 'TEACHER', 'ADMIN']
+          }
+        });
+      }
+      console.log('[Seed] Default forum categories seeded successfully!');
+    }
+  } catch (err) {
+    console.error('[Seed Error] Failed to seed default categories:', err);
+  }
+}
+
+// Auto-seed on startup
+seedDefaultCategories();
+
 export default app;
+
