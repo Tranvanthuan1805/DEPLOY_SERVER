@@ -2462,7 +2462,6 @@ export default function App() {
             <div style={{ padding: '0' }}>
               <Forum currentUser={currentUser} />
             </div>
->>>>>>> theirs
           )}
 
           {/* ================= STUDENT LEARNING WORKSPACE ================= */}
