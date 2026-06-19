@@ -36,6 +36,8 @@ export default function CoursesPage({ courses, currentUser, onSelectCourse, onCh
     setBlock,
     level,
     setLevel,
+    grade,
+    setGrade,
     sortBy,
     setSortBy,
     clearFilters,
@@ -52,7 +54,7 @@ export default function CoursesPage({ courses, currentUser, onSelectCourse, onCh
       setLoading(false);
     }, 450);
     return () => clearTimeout(timer);
-  }, [debouncedSearch, subject, block, level, sortBy, badgeFilter]);
+  }, [debouncedSearch, subject, block, level, grade, sortBy, badgeFilter]);
 
   // Combine filters in memory from standard database courses list
   const filteredCourses = useMemo(() => {
@@ -83,6 +85,10 @@ export default function CoursesPage({ courses, currentUser, onSelectCourse, onCh
       result = result.filter(c => c.level === level);
     }
 
+    if (grade !== 'All') {
+      result = result.filter(c => c.grade === Number(grade));
+    }
+
     if (badgeFilter !== 'All') {
       if (badgeFilter === 'MIỄN PHÍ') {
         result = result.filter(c => c.badge?.toUpperCase() === 'MIỄN PHÍ' || c.priceSale === 0 || c.priceOriginal === 0);
@@ -105,7 +111,7 @@ export default function CoursesPage({ courses, currentUser, onSelectCourse, onCh
     }
 
     return result;
-  }, [coursesList, debouncedSearch, subject, block, level, sortBy, badgeFilter]);
+  }, [coursesList, debouncedSearch, subject, block, level, grade, sortBy, badgeFilter]);
 
   const handleClearFilters = () => {
     clearFilters();
@@ -179,6 +185,8 @@ export default function CoursesPage({ courses, currentUser, onSelectCourse, onCh
             setBlock={setBlock}
             level={level}
             setLevel={setLevel}
+            grade={grade}
+            setGrade={setGrade}
             sortBy={sortBy}
             setSortBy={setSortBy}
             badgeFilter={badgeFilter}
@@ -193,8 +201,9 @@ export default function CoursesPage({ courses, currentUser, onSelectCourse, onCh
             Tìm thấy {filteredCourses.length} khóa học phù hợp
             {subject !== 'All' ? ` môn ${subject}` : ''}
             {block !== 'All' ? ` · ${block}` : ''}
+            {grade !== 'All' ? ` · Lớp ${grade}` : ''}
           </span>
-          {(search || subject !== 'All' || block !== 'All' || level !== 'All' || badgeFilter !== 'All') && (
+          {(search || subject !== 'All' || block !== 'All' || level !== 'All' || grade !== 'All' || badgeFilter !== 'All') && (
             <button
               onClick={handleClearFilters}
               style={{

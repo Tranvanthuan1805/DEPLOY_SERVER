@@ -9,6 +9,7 @@ export default function useCourseFilters() {
       subject: params.get('subject') || 'All',
       block: params.get('block') || 'All',
       level: params.get('level') || 'All',
+      grade: params.get('grade') || 'All',
       sortBy: params.get('sortBy') || 'popular'
     };
   }, []);
@@ -20,6 +21,7 @@ export default function useCourseFilters() {
   const [subject, setSubject] = useState(initialParams.subject);
   const [block, setBlock] = useState(initialParams.block);
   const [level, setLevel] = useState(initialParams.level);
+  const [grade, setGrade] = useState(initialParams.grade);
   const [sortBy, setSortBy] = useState(initialParams.sortBy);
 
   // Debounce search input
@@ -38,6 +40,7 @@ export default function useCourseFilters() {
     if (subject !== 'All') params.set('subject', subject);
     if (block !== 'All') params.set('block', block);
     if (level !== 'All') params.set('level', level);
+    if (grade !== 'All') params.set('grade', grade);
     if (sortBy !== 'popular') params.set('sortBy', sortBy);
 
     const queryString = params.toString();
@@ -45,7 +48,7 @@ export default function useCourseFilters() {
     
     // Use replaceState to keep history clean and avoid bloating browser history stacks
     window.history.replaceState(null, '', newUrl);
-  }, [debouncedSearch, subject, block, level, sortBy]);
+  }, [debouncedSearch, subject, block, level, grade, sortBy]);
 
   // Listen for browser navigation changes (back/forward)
   useEffect(() => {
@@ -56,6 +59,7 @@ export default function useCourseFilters() {
       setSubject(current.subject);
       setBlock(current.block);
       setLevel(current.level);
+      setGrade(current.grade);
       setSortBy(current.sortBy);
     };
 
@@ -69,6 +73,7 @@ export default function useCourseFilters() {
     setSubject('All');
     setBlock('All');
     setLevel('All');
+    setGrade('All');
     setSortBy('popular');
   }, []);
 
@@ -82,6 +87,8 @@ export default function useCourseFilters() {
     setBlock,
     level,
     setLevel,
+    grade,
+    setGrade,
     sortBy,
     setSortBy,
     clearFilters

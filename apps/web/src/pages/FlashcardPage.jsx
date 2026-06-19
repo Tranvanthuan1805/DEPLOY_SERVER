@@ -1122,20 +1122,48 @@ export default function FlashcardPage({ currentUser, navigateTo, addLog }) {
         
         {/* ================= LEFT SIDEBAR ================= */}
         <aside className="flashcard-left-sidebar">
+          <div 
+            onClick={() => navigateTo('/')}
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '8px', 
+              cursor: 'pointer',
+              textDecoration: 'none',
+              padding: '6px 8px 16px 8px',
+              borderBottom: '1px solid var(--fc-border-dark, #2F2F26)',
+              marginBottom: '14px',
+              width: '100%',
+              boxSizing: 'border-box'
+            }}
+            title="Quay lại Trang chủ"
+          >
+            <div 
+              style={{
+                width: '32px',
+                height: '32px',
+                background: 'linear-gradient(135deg, #6c5ce7, #4f46e5)',
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 4px 10px rgba(108, 92, 231, 0.25)'
+              }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: '18px', height: '18px' }}>
+                <path d="M18 6H8.5a4 4 0 100 8h8" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M14 10H8.5" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="18" cy="6" r="1.5" fill="#FFD234" />
+                <circle cx="16.5" cy="14" r="1.5" fill="#FFD234" />
+              </svg>
+            </div>
+            <span style={{ fontWeight: 800, fontSize: '15px', color: '#fff', letterSpacing: '0.3px', fontFamily: "'Outfit', sans-serif" }}>
+              EduPath <em style={{ fontStyle: 'normal', color: '#FFD234' }}>AI</em>
+            </span>
+          </div>
+
           <div className="flashcard-nav-menu">
             <h4 className="flashcard-menu-title">HỌC TẬP</h4>
-
-            <button 
-              className="flashcard-menu-item"
-              onClick={() => navigateTo('/')}
-              style={{ marginBottom: '10px', borderBottom: '1px solid var(--fc-border-dark)', paddingBottom: '10px', borderRadius: 0 }}
-              title="Quay lại Dashboard Trang chủ chính"
-            >
-              <span className="flashcard-menu-item-left">
-                <span className="flashcard-menu-item-icon"><HiChevronLeft style={{ fontSize: '16px', color: 'var(--fc-gold)' }} /></span>
-                <span style={{ fontWeight: '800', color: 'var(--fc-gold)' }}>Về Trang chủ</span>
-              </span>
-            </button>
 
             <button 
               className="flashcard-btn-create-deck" 

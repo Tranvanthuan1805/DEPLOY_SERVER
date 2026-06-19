@@ -1,4 +1,4 @@
-export type Role = 'GUEST' | 'STUDENT' | 'TEACHER' | 'ADMIN';
+export type Role = 'GUEST' | 'STUDENT' | 'TEACHER' | 'ADMIN' | 'AFFILIATE';
 export type SubjectGroup = 'A01' | 'B00' | 'D01';
 export type Difficulty = 'EASY' | 'MEDIUM' | 'HARD';
 

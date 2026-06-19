@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, forwardRef } from 'react';
 
-export default function VideoPlayer({ videoUrl, title, onEnded }) {
+const VideoPlayer = forwardRef(({ videoUrl, title, onEnded, onTimeUpdate }, ref) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -37,14 +37,18 @@ export default function VideoPlayer({ videoUrl, title, onEnded }) {
       )}
 
       <video
+        ref={ref}
         key={videoUrl}
         src={videoUrl}
         controls
         autoPlay
         onLoadedData={() => setLoading(false)}
         onEnded={onEnded}
+        onTimeUpdate={(e) => onTimeUpdate?.(e.target.currentTime)}
         style={{ width: '100%', height: '100%', objectFit: 'contain' }}
       />
     </div>
   );
-}
+});
+
+export default VideoPlayer;

@@ -7,12 +7,49 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('[Seed] Resetting database records...');
   
-  // Wipe database tables
-  await prisma.user.deleteMany({});
+  // Wipe database tables in order of dependency
+  await prisma.testAttemptAnswer.deleteMany({});
+  await prisma.testAttempt.deleteMany({});
+  await prisma.examQuestion.deleteMany({});
   await prisma.question.deleteMany({});
   await prisma.exam.deleteMany({});
+  
+  await prisma.enrollment.deleteMany({});
+  await prisma.review.deleteMany({});
+  await prisma.document.deleteMany({});
+  await prisma.lesson.deleteMany({});
   await prisma.course.deleteMany({});
+  
+  await prisma.studyGroupMember.deleteMany({});
+  await prisma.groupAnnouncement.deleteMany({});
+  await prisma.studyGroup.deleteMany({});
+  await prisma.resourceShare.deleteMany({});
+  await prisma.forumReaction.deleteMany({});
+  await prisma.forumComment.deleteMany({});
+  await prisma.forumReport.deleteMany({});
+  await prisma.forumPost.deleteMany({});
   await prisma.forumCategory.deleteMany({});
+  
+  await prisma.studentProfile.deleteMany({});
+  await prisma.userBadge.deleteMany({});
+  await prisma.userGamification.deleteMany({});
+  await prisma.nodeProgress.deleteMany({});
+  await prisma.userAnswer.deleteMany({});
+  await prisma.nodeQuizAttempt.deleteMany({});
+  await prisma.dailyContribution.deleteMany({});
+  await prisma.subjectStreak.deleteMany({});
+  await prisma.reputationHistory.deleteMany({});
+  await prisma.documentComment.deleteMany({});
+  await prisma.weaknessMindmap.deleteMany({});
+  await prisma.uploadedExamFile.deleteMany({});
+  await prisma.examPaperAnalysis.deleteMany({});
+  await prisma.roleChangeRequest.deleteMany({});
+  await prisma.chatMessage.deleteMany({});
+  await prisma.notification.deleteMany({});
+  await prisma.admin.deleteMany({});
+  await prisma.teacher.deleteMany({});
+  await prisma.student.deleteMany({});
+  await prisma.user.deleteMany({});
 
 
   console.log('[Seed] Seeding default admin account...');
@@ -28,7 +65,7 @@ async function main() {
     }
   });
 
-  console.log('[Seed] Seeding 2 pre-approved teachers...');
+  console.log('[Seed] Seeding 3 approved teachers and 1 pending teacher...');
   const teacherHash = await bcrypt.hash('teacher123', 12);
   const teacherA = await prisma.user.create({
     data: {
@@ -52,10 +89,32 @@ async function main() {
     }
   });
 
-  console.log('[Seed] Seeding 5 student accounts...');
+  const teacherC = await prisma.user.create({
+    data: {
+      email: 'quynhchi.english@edupath.vn',
+      passwordHash: teacherHash,
+      fullName: 'Cô Phạm Quỳnh Chi',
+      role: 'TEACHER',
+      avatarUrl: 'QC',
+      teacher: { create: { isApproved: true, bio: 'Thạc sĩ Ngôn ngữ Anh, chuyên luyện thi IELTS và THPTQG môn Tiếng Anh.' } }
+    }
+  });
+
+  const teacherPending = await prisma.user.create({
+    data: {
+      email: 'pending.teacher@edupath.vn',
+      passwordHash: teacherHash,
+      fullName: 'Thầy Nguyễn Văn Chờ',
+      role: 'TEACHER',
+      avatarUrl: 'TC',
+      teacher: { create: { isApproved: false, bio: 'Giảng viên ôn Văn đang chờ duyệt.' } }
+    }
+  });
+
+  console.log('[Seed] Seeding 10 student accounts...');
   const studentHash = await bcrypt.hash('student123', 12);
   const studentList = [];
-  for (let i = 1; i <= 5; i++) {
+  for (let i = 1; i <= 10; i++) {
     const student = await prisma.user.create({
       data: {
         email: `student${i}@gmail.com`,
@@ -63,6 +122,7 @@ async function main() {
         fullName: `Học sinh Nguyễn Minh Anh ${i}`,
         role: 'STUDENT',
         avatarUrl: `S${i}`,
+        isPro: i === 1 || i === 2,
         student: {
           create: {
             subjectGroup: i % 2 === 0 ? 'A01' : 'D01'
@@ -70,6 +130,17 @@ async function main() {
         }
       }
     });
+
+    await prisma.userGamification.create({
+      data: {
+        userId: student.id,
+        level: i,
+        xp: i * 150,
+        streakDays: i >= 8 ? 6 : i,
+        lastActiveDate: new Date()
+      }
+    });
+
     studentList.push(student);
   }
 
@@ -79,7 +150,6 @@ async function main() {
       title: 'Khảo sát hàm số nâng cao THPTQG',
       description: 'Chuyên đề bứt phá điểm 9+ môn Toán khối A01 và D01.',
       subject: 'Toán học',
-      subjectGroup: 'A01',
       price: 499.0,
       isPublished: true,
       isApproved: true,
@@ -101,7 +171,6 @@ async function main() {
       title: 'Hóa học hữu cơ Este - Lipit chuyên sâu',
       description: 'Lộ trình bứt phá điểm tuyệt đối môn Hóa học khối B00.',
       subject: 'Hóa học',
-      subjectGroup: 'B00',
       price: 599.0,
       isPublished: true,
       isApproved: true,
@@ -123,7 +192,6 @@ async function main() {
       title: 'Chuyên đề Dao động cơ học thi đại học',
       description: 'Nắm chắc 7+ điểm phần dao động điều hòa khối A01.',
       subject: 'Vật lý',
-      subjectGroup: 'A01',
       price: 399.0,
       isPublished: true,
       isApproved: true,
@@ -1347,8 +1415,14 @@ async function main() {
   ];
 
   for (const cat of defaultCategories) {
-    await prisma.forumCategory.create({
-      data: {
+    await prisma.forumCategory.upsert({
+      where: { slug: cat.slug },
+      update: {
+        name: cat.name,
+        description: cat.description,
+        allowedRoles: ['STUDENT', 'TEACHER', 'ADMIN']
+      },
+      create: {
         name: cat.name,
         slug: cat.slug,
         description: cat.description,
@@ -1476,8 +1550,13 @@ async function main() {
   });
 
   console.log('[Seed] Seeding Forum tables...');
-  const category = await prisma.forumCategory.create({
-    data: {
+  const category = await prisma.forumCategory.upsert({
+    where: { slug: 'thao-luan-mon-toan' },
+    update: {
+      name: 'Thảo luận môn Toán',
+      description: 'Nơi trao đổi bài tập khó, phương pháp giải nhanh trắc nghiệm môn Toán.'
+    },
+    create: {
       name: 'Thảo luận môn Toán',
       slug: 'thao-luan-mon-toan',
       description: 'Nơi trao đổi bài tập khó, phương pháp giải nhanh trắc nghiệm môn Toán.'
@@ -1659,7 +1738,397 @@ async function main() {
     });
   }
 
+  console.log('[Seed] Seeding additional test data requested...');
+
+  // Note: pending.teacher was created above with pending teacher accounts. We preserve variable references.
+  // const pendingTeacher = await prisma.user.findUnique({ where: { email: 'pending.teacher@edupath.vn' } });
+
+  // 2. Thêm 2 Course pending approval
+  const coursePending1 = await prisma.course.create({
+    data: {
+      title: 'Hình học giải tích nâng cao Oxyz',
+      description: 'Chương trình ôn tập toàn bộ phần Hình học giải tích nâng cao.',
+      subject: 'Toán học',
+      price: 350.0,
+      isPublished: false,
+      isApproved: false,
+      teacherId: teacherA.id
+    }
+  });
+
+  const coursePending2 = await prisma.course.create({
+    data: {
+      title: 'Luyện đề Tiếng Anh nâng cao 9+',
+      description: 'Khóa học ôn đề thực chiến bám sát đề thi 2026.',
+      subject: 'Tiếng Anh',
+      price: 299.0,
+      isPublished: false,
+      isApproved: false,
+      teacherId: teacherB.id
+    }
+  });
+
+  // Create two extra approved courses to reach 5 courses total for enrollments
+  const courseD = await prisma.course.create({
+    data: {
+      title: 'Chinh phục ngữ pháp Tiếng Anh 12',
+      description: 'Lộ trình ngữ pháp trọng tâm ôn thi THPTQG.',
+      subject: 'Tiếng Anh',
+      price: 250.0,
+      isPublished: true,
+      isApproved: true,
+      teacherId: teacherB.id
+    }
+  });
+
+  const courseE = await prisma.course.create({
+    data: {
+      title: 'Sinh học tế bào và di truyền',
+      description: 'Lý thuyết cơ bản và bài tập di truyền học.',
+      subject: 'Sinh học',
+      price: 300.0,
+      isPublished: true,
+      isApproved: true,
+      teacherId: teacherA.id
+    }
+  });
+
+  // 3. Thêm 5 enrollment cho mỗi student (đa dạng khóa)
+  const coursesToEnroll = [courseA, courseB, courseC, courseD, courseE];
+  for (let sIdx = 0; sIdx < studentList.length; sIdx++) {
+    const student = studentList[sIdx];
+    for (let cIdx = 0; cIdx < coursesToEnroll.length; cIdx++) {
+      const course = coursesToEnroll[cIdx];
+      await prisma.enrollment.create({
+        data: {
+          studentId: student.id,
+          courseId: course.id,
+          transactionId: `SEED_ENROLL_${student.id}_${course.id}_${Date.now() + cIdx}`,
+          paidAt: new Date()
+        }
+      });
+    }
+  }
+
+  // 4. Thêm 3 RoleChangeRequest pending
+  await prisma.roleChangeRequest.create({
+    data: {
+      userId: studentList[0].id,
+      currentRole: 'STUDENT',
+      requestedRole: 'TEACHER',
+      reason: 'Tôi muốn đóng góp các bài giảng toán học chất lượng cao.',
+      status: 'PENDING'
+    }
+  });
+
+  await prisma.roleChangeRequest.create({
+    data: {
+      userId: studentList[1].id,
+      currentRole: 'STUDENT',
+      requestedRole: 'TEACHER',
+      reason: 'Tôi muốn chia sẻ tài liệu ôn thi Vật lý.',
+      status: 'PENDING'
+    }
+  });
+
+  await prisma.roleChangeRequest.create({
+    data: {
+      userId: studentList[2].id,
+      currentRole: 'STUDENT',
+      requestedRole: 'ADMIN',
+      reason: 'Yêu cầu làm admin hỗ trợ hệ thống.',
+      status: 'PENDING'
+    }
+  });
+
+  // 5. Thêm 10 TestAttempt với điểm khác nhau
+  const exams = [examA, examB];
+  for (let i = 0; i < 10; i++) {
+    const student = studentList[i % studentList.length];
+    const exam = exams[i % exams.length];
+    const score = 2.0 + (i * 0.8); // Points: 2.0, 2.8, 3.6, 4.4, 5.2, 6.0, 6.8, 7.6, 8.4, 9.2
+    await prisma.testAttempt.create({
+      data: {
+        studentId: student.id,
+        examId: exam.id,
+        score,
+        startedAt: new Date(Date.now() - 3600000),
+        submittedAt: new Date(),
+        status: 'SUBMITTED',
+        correctCount: Math.round(score * 2),
+        wrongCount: 20 - Math.round(score * 2),
+        durationUsed: 1200
+      }
+    });
+  }
+
+  // 6. Thêm 5 ForumPost + 3 ForumReport pending
+  const categoriesList = await prisma.forumCategory.findMany();
+  const targetCategory = categoriesList[0] || { id: 1 };
+  
+  const createdPosts = [];
+  for (let i = 1; i <= 5; i++) {
+    const post = await prisma.forumPost.create({
+      data: {
+        title: `Bài thảo luận học tập số ${i}`,
+        content: `Nội dung chi tiết bài viết chia sẻ kinh nghiệm học tập số ${i} trên hệ thống.`,
+        slug: `bai-thao-luan-hoc-tap-so-${i}-${Date.now()}`,
+        categoryId: targetCategory.id,
+        authorId: studentList[i % studentList.length].id,
+        postType: 'GENERAL'
+      }
+    });
+    createdPosts.push(post);
+  }
+
+  // Create 3 ForumReport pending
+  for (let i = 0; i < 3; i++) {
+    await prisma.forumReport.create({
+      data: {
+        reporterId: studentList[(i + 1) % studentList.length].id,
+        postId: createdPosts[i].id,
+        reason: `Nội dung bài viết số ${i+1} có dấu hiệu spam hoặc ngôn từ không phù hợp.`,
+        status: 'PENDING'
+      }
+    });
+  }
+
+  console.log('[Seed] Seeding additional test data completed successfully!');
+
   await seedRealExamData();
+
+
+  // Post-process exam grades: distribute exams across Grade 10, 11, and 12
+  console.log('[Seed] Post-processing exam grades...');
+  const allSeededExams = await prisma.exam.findMany();
+  for (let i = 0; i < allSeededExams.length; i++) {
+    const exam = allSeededExams[i];
+    const grade = 10 + (i % 3); // 10, 11, 12
+    await prisma.exam.update({
+      where: { id: exam.id },
+      data: { grade }
+    });
+  }
+
+  console.log('[Seed] Seeding 3 approved affiliates and 1 pending affiliate...');
+  const affiliateHash = await bcrypt.hash('affiliate123', 12);
+  
+  const affiliate1 = await prisma.user.create({
+    data: {
+      email: 'affiliate1@edupath.vn',
+      passwordHash: affiliateHash,
+      fullName: 'Đối tác Tiếp thị Đồng (Bronze)',
+      role: 'AFFILIATE',
+      avatarUrl: 'AF1',
+      affiliate: {
+        create: {
+          referralCode: 'REFBRONZ',
+          commissionRate: 0.15,
+          totalEarnings: 0,
+          pendingEarnings: 0,
+          paidEarnings: 0,
+          tier: 'BRONZE',
+          bankName: 'Vietcombank',
+          bankAccount: '1012345678',
+          taxId: '809217823',
+          isApproved: true,
+          approvedAt: new Date()
+        }
+      }
+    }
+  });
+
+  const affiliate2 = await prisma.user.create({
+    data: {
+      email: 'affiliate2@edupath.vn',
+      passwordHash: affiliateHash,
+      fullName: 'Đối tác Tiếp thị Bạc (Silver)',
+      role: 'AFFILIATE',
+      avatarUrl: 'AF2',
+      affiliate: {
+        create: {
+          referralCode: 'REFSILVR',
+          commissionRate: 0.18,
+          totalEarnings: 450.0,
+          pendingEarnings: 150.0,
+          paidEarnings: 300.0,
+          tier: 'SILVER',
+          bankName: 'Techcombank',
+          bankAccount: '19012345678',
+          taxId: '809217824',
+          isApproved: true,
+          approvedAt: new Date()
+        }
+      }
+    }
+  });
+
+  const affiliate3 = await prisma.user.create({
+    data: {
+      email: 'affiliate3@edupath.vn',
+      passwordHash: affiliateHash,
+      fullName: 'Đối tác Tiếp thị Vàng (Gold)',
+      role: 'AFFILIATE',
+      avatarUrl: 'AF3',
+      affiliate: {
+        create: {
+          referralCode: 'REFGOLDC',
+          commissionRate: 0.22,
+          totalEarnings: 1200.0,
+          pendingEarnings: 400.0,
+          paidEarnings: 800.0,
+          tier: 'GOLD',
+          bankName: 'ACB',
+          bankAccount: '202345678',
+          taxId: '809217825',
+          isApproved: true,
+          approvedAt: new Date()
+        }
+      }
+    }
+  });
+
+  const affiliatePending = await prisma.user.create({
+    data: {
+      email: 'pending.affiliate@edupath.vn',
+      passwordHash: affiliateHash,
+      fullName: 'Đối tác Tiếp thị Chờ Duyệt',
+      role: 'AFFILIATE',
+      avatarUrl: 'AFP',
+      affiliate: {
+        create: {
+          referralCode: 'REFPNDNG',
+          commissionRate: 0.15,
+          totalEarnings: 0,
+          pendingEarnings: 0,
+          paidEarnings: 0,
+          tier: 'BRONZE',
+          bankName: 'Momo',
+          bankAccount: '0901234567',
+          isApproved: false
+        }
+      }
+    }
+  });
+
+  console.log('[Seed] Seeding 50 Referral records...');
+  for (let k = 1; k <= 50; k++) {
+    const referredEmail = `referred_student_${k}@gmail.com`;
+    const refUser = await prisma.user.create({
+      data: {
+        email: referredEmail,
+        passwordHash: studentHash,
+        fullName: `Học sinh Được Giới Thiệu ${k}`,
+        role: 'STUDENT',
+        avatarUrl: `R${k % 9}`,
+        student: { create: { subjectGroup: 'A01' } }
+      }
+    });
+
+    const targetAffiliate = k <= 10 ? affiliate1 : (k <= 35 ? affiliate2 : affiliate3);
+    const converted = k % 2 === 0;
+    
+    await prisma.referral.create({
+      data: {
+        affiliateId: targetAffiliate.id,
+        referredUserId: refUser.id,
+        source: k % 4 === 0 ? 'social' : (k % 3 === 0 ? 'email' : 'landing'),
+        campaign: k % 3 === 0 ? 'summer_campaign' : 'default',
+        isConverted: converted,
+        convertedAt: converted ? new Date() : null
+      }
+    });
+
+    await prisma.user.update({
+      where: { id: refUser.id },
+      data: { referredBy: targetAffiliate.id }
+    });
+  }
+
+  console.log('[Seed] Seeding 30 Commission records...');
+  for (let c = 1; c <= 30; c++) {
+    const status = c <= 10 ? 'PENDING' : (c <= 25 ? 'APPROVED' : 'PAID');
+    const targetAffiliate = c <= 10 ? affiliate1 : (c <= 20 ? affiliate2 : affiliate3);
+    
+    await prisma.commission.create({
+      data: {
+        affiliateId: targetAffiliate.id,
+        orderId: 1000 + c,
+        amount: 50.0 + (c * 5),
+        rate: targetAffiliate.id === affiliate1.id ? 0.15 : (targetAffiliate.id === affiliate2.id ? 0.18 : 0.22),
+        status: status as any,
+        earnedAt: new Date(Date.now() - (30 - c) * 24 * 60 * 60 * 1000),
+        approvedAt: status !== 'PENDING' ? new Date() : null,
+        paidAt: status === 'PAID' ? new Date() : null
+      }
+    });
+  }
+
+  console.log('[Seed] Seeding 2 Payout records...');
+  await prisma.payout.create({
+    data: {
+      affiliateId: affiliate2.id,
+      amount: 250.0,
+      method: 'bank',
+      status: 'COMPLETED',
+      requestedAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000),
+      completedAt: new Date(),
+      transactionId: 'TXN12345678'
+    }
+  });
+
+  await prisma.payout.create({
+    data: {
+      affiliateId: affiliate3.id,
+      amount: 400.0,
+      method: 'bank',
+      status: 'PENDING',
+      requestedAt: new Date()
+    }
+  });
+
+  console.log('[Seed] Seeding 15 Teacher Material records...');
+  const materialsList = [
+    { title: 'Tài liệu ôn thi cực trị hàm số lớp 12', subject: 'Toán học', fileType: 'pdf', isPublic: true, isApproved: true },
+    { title: 'Tóm tắt công thức giải nhanh Logarit', subject: 'Toán học', fileType: 'pdf', isPublic: true, isApproved: true },
+    { title: 'Video giải chi tiết đề thi thử chuyên Hùng Vương', subject: 'Toán học', fileType: 'mp4', isPublic: true, isApproved: true },
+    { title: 'Slide bài giảng khảo sát hàm số bậc ba', subject: 'Toán học', fileType: 'pptx', isPublic: true, isApproved: false },
+    { title: 'Bài tập trắc nghiệm tiệm cận đứng tiệm cận ngang', subject: 'Toán học', fileType: 'docx', isPublic: false, isApproved: true },
+
+    { title: 'Sổ tay Vật Lý 12 ôn thi THPTQG 2026', subject: 'Vật lý', fileType: 'pdf', isPublic: true, isApproved: true },
+    { title: 'Video thực hành giải bài tập dòng điện xoay chiều', subject: 'Vật lý', fileType: 'mp4', isPublic: true, isApproved: true },
+    { title: 'Bộ đề ôn tập học kỳ 1 môn Vật lý 12', subject: 'Vật lý', fileType: 'pdf', isPublic: true, isApproved: true },
+    { title: 'Slide bài giảng dao động điều hòa con lắc đơn', subject: 'Vật lý', fileType: 'pptx', isPublic: true, isApproved: false },
+    { title: 'Bài tập tự luyện dao động tắt dần nâng cao', subject: 'Vật lý', fileType: 'docx', isPublic: false, isApproved: true },
+
+    { title: 'Ebook từ vựng Tiếng Anh theo chủ đề thi THPT', subject: 'Tiếng Anh', fileType: 'pdf', isPublic: true, isApproved: true },
+    { title: 'Chuyên đề ngữ pháp câu điều kiện và câu ước', subject: 'Tiếng Anh', fileType: 'pdf', isPublic: true, isApproved: true },
+    { title: 'Video hướng dẫn phát âm đuôi ed và s/es', subject: 'Tiếng Anh', fileType: 'mp4', isPublic: true, isApproved: true },
+    { title: 'Bộ đề thi thử môn Anh chuẩn cấu trúc đề 2026', subject: 'Tiếng Anh', fileType: 'pdf', isPublic: true, isApproved: false },
+    { title: 'Bài tập trắc nghiệm câu hỏi đuôi từ cơ bản đến nâng cao', subject: 'Tiếng Anh', fileType: 'docx', isPublic: false, isApproved: true }
+  ];
+
+  for (let m = 0; m < materialsList.length; m++) {
+    const tId = m < 5 ? teacherA.id : (m < 10 ? teacherB.id : teacherC.id);
+    const mat = materialsList[m];
+    await prisma.teacherMaterial.create({
+      data: {
+        teacherId: tId,
+        title: mat.title,
+        description: `Tài liệu chất lượng cao ôn tập môn ${mat.subject} phục vụ kỳ thi tốt nghiệp THPT Quốc Gia.`,
+        subject: mat.subject,
+        grade: '12',
+        fileUrl: `https://edupath.vn/materials/material_${m + 1}.${mat.fileType}`,
+        fileType: mat.fileType,
+        fileSize: 1024 * 1024 * (m + 1),
+        isPublic: mat.isPublic,
+        isApproved: mat.isApproved,
+        downloadCount: m * 15,
+        viewCount: m * 35,
+        price: m % 3 === 0 ? 0.0 : 49.0
+      }
+    });
+  }
 
   console.log('[Seed] Database seeding completed successfully!');
 }

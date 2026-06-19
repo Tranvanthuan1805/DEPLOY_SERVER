@@ -130,6 +130,9 @@ export async function importExamFromObject(examData: any, creatorId: number): Pr
     subjectGroup = 'B00';
   }
 
+  const user = await prisma.user.findUnique({ where: { id: creatorId } });
+  const examStatus = user?.role === 'TEACHER' ? 'pending' : 'published';
+
   // 3. Create new Exam
   dbExam = await prisma.exam.create({
     data: {
@@ -143,7 +146,8 @@ export async function importExamFromObject(examData: any, creatorId: number): Pr
       source: examData.source || 'Bộ GD&ĐT',
       totalQuestions: examData.total_questions || examData.questions.length,
       difficulty: mapDifficulty(examData.questions[0]?.difficulty || 'Trung bình'),
-      status: 'published'
+      status: examStatus,
+      grade: examData.grade ? Number(examData.grade) : null
     }
   });
 
@@ -171,7 +175,9 @@ export async function importExamFromObject(examData: any, creatorId: number): Pr
         subject: examData.subject_name,
         topic: q.topic || 'Chuyên đề ôn thi',
         difficulty: mapDifficulty(q.difficulty),
-        createdBy: creatorId
+        createdBy: creatorId,
+        imageUrl: q.imageUrl || q.question_image_url || null,
+        audioUrl: q.audioUrl || q.audio_url || null
       }
     });
 

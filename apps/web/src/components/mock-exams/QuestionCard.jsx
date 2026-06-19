@@ -72,6 +72,30 @@ export default function QuestionCard({
         <p style={{ margin: 0, whiteSpace: 'pre-line' }}>{question.question_text}</p>
       </div>
 
+      {question.audio_url && (
+        <div 
+          style={{ 
+            margin: '16px 0', 
+            padding: '12px 16px', 
+            background: 'var(--bg-main)', 
+            border: '1.5px solid var(--border)', 
+            borderRadius: '12px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px'
+          }}
+        >
+          <span style={{ fontSize: '12.5px', fontWeight: 'bold', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            🔊 Học phần Nghe ngoại ngữ:
+          </span>
+          <audio 
+            src={question.audio_url} 
+            controls 
+            style={{ width: '100%', outline: 'none' }}
+          />
+        </div>
+      )}
+
       {question.question_image_url && (
         <div style={{ margin: '16px 0', textAlign: 'center' }}>
           <img 

@@ -1,14 +1,17 @@
 import type { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'edupath_jwt_secret_key_2026';
+if (!process.env.JWT_SECRET) {
+  throw new Error('FATAL: JWT_SECRET environment variable is missing!');
+}
+const JWT_SECRET = process.env.JWT_SECRET;
 
 export interface AuthRequest extends Request {
   user?: {
     id: number;
     email: string;
     fullName: string;
-    role: 'GUEST' | 'STUDENT' | 'TEACHER' | 'ADMIN';
+    role: 'GUEST' | 'STUDENT' | 'TEACHER' | 'ADMIN' | 'AFFILIATE';
   };
 }
 
@@ -30,7 +33,7 @@ export function authenticateJWT(req: AuthRequest, res: Response, next: NextFunct
   }
 }
 
-export function requireRole(allowedRoles: ('GUEST' | 'STUDENT' | 'TEACHER' | 'ADMIN')[]) {
+export function requireRole(allowedRoles: ('GUEST' | 'STUDENT' | 'TEACHER' | 'ADMIN' | 'AFFILIATE')[]) {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
     if (!req.user) {
       return res.status(401).json({ success: false, error: 'Chưa được xác thực!' });

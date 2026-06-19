@@ -68,7 +68,7 @@ function renderDescription(desc) {
 // ============================================================
 // EXAM BANK PAGE COMPONENT (DOCUMENT REPOSITORY)
 // ============================================================
-export default function ExamBankPage({ currentUser, navigateTo }) {
+export default function ExamBankPage({ currentUser, navigateTo, hideHeader }) {
   const [selectedSubject, setSelectedSubject] = useState('all');
   const [selectedLevel, setSelectedLevel] = useState('Tất cả');
   const [selectedPriceFilter, setSelectedPriceFilter] = useState('Tất cả');
@@ -455,7 +455,7 @@ export default function ExamBankPage({ currentUser, navigateTo }) {
   return (
     <div className="exambank-page">
       {/* Guest Header */}
-      {isGuest && (
+      {isGuest && !hideHeader && (
         <header className="exambank-guest-header">
           <div className="exambank-guest-header__logo" onClick={() => navigateTo('/')}>
             <div className="exambank-guest-header__logo-icon">E</div>

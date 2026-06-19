@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { HiX, HiCheckCircle, HiLockOpen, HiCheck, HiDuplicate, HiRefresh, HiSparkles } from 'react-icons/hi';
+import { HiX, HiCheckCircle, HiLockOpen, HiCheck, HiDuplicate, HiRefresh, HiSparkles, HiTrash, HiChevronLeft, HiCreditCard } from 'react-icons/hi';
 import { API_BASE } from '../api';
+import { toast } from '../utils/toast';
 
-
-export default function CheckoutModal({ course, onClose, onPaymentSuccess, addLog }) {
+export default function CheckoutModal({ courses = [], onClose, onPaymentSuccess, onRemoveCourse, addLog }) {
   const [step, setStep] = useState(1); // 1: Cart view, 2: QR checkout, 3: Verification processing, 4: Success unlock
   const [seconds, setSeconds] = useState(300); // 5 minutes timeout
   const [copiedField, setCopiedField] = useState(null); // tracking copy states
@@ -17,8 +17,7 @@ export default function CheckoutModal({ course, onClose, onPaymentSuccess, addLo
 
   const currentUser = JSON.parse(localStorage.getItem('current_user')) || {};
   const studentId = currentUser.id || 1;
-  const courseId = course.id;
-  const transferCode = `EP${studentId}C${courseId}`;
+  const transferCode = `EP${studentId}CRT`;
 
   // Helper function to parse course price to actual VND
   const parsePrice = (priceVal) => {
@@ -34,7 +33,7 @@ export default function CheckoutModal({ course, onClose, onPaymentSuccess, addLo
     return 0;
   };
 
-  const originalAmount = parsePrice(course.priceSale || course.price || course.priceOriginal);
+  const originalAmount = courses.reduce((sum, c) => sum + parsePrice(c.priceSale || c.price || c.priceOriginal), 0);
   const discountAmount = Math.round(originalAmount * (discountPercent / 100));
   const finalAmount = originalAmount - discountAmount;
 
@@ -49,6 +48,8 @@ export default function CheckoutModal({ course, onClose, onPaymentSuccess, addLo
   // Polling for automated checkout status update
   useEffect(() => {
     let intervalId;
+    if (courses.length === 0) return;
+    const courseId = courses[0].id; // query status for the primary cart course
 
     const checkPaymentStatus = async () => {
       const token = localStorage.getItem('access_token');
@@ -63,9 +64,9 @@ export default function CheckoutModal({ course, onClose, onPaymentSuccess, addLo
         const data = await res.json();
         
         if (data.success && data.data?.isEnrolled) {
-          addLog(`[SePay Webhook] Hệ thống đã ghi nhận khoản thanh toán tự động cho khóa "${course.title}".`, 'sys');
+          addLog(`[SePay Webhook] Hệ thống đã ghi nhận khoản thanh toán tự động cho giỏ hàng.`, 'sys');
           setStep(4);
-          onPaymentSuccess(course.id);
+          onPaymentSuccess(courses.map(c => c.id));
         }
       } catch (err) {
         console.error('Lỗi khi thăm dò trạng thái giao dịch:', err);
@@ -83,7 +84,7 @@ export default function CheckoutModal({ course, onClose, onPaymentSuccess, addLo
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [step, courseId]);
+  }, [step, courses]);
 
   // General countdown timer
   useEffect(() => {
@@ -108,22 +109,24 @@ export default function CheckoutModal({ course, onClose, onPaymentSuccess, addLo
   };
 
   const handleFreeCheckout = () => {
-    addLog(`[Free Code] Kích hoạt khóa học "${course.title}" miễn phí 100% bằng mã giảm giá...`, 'sys');
+    const titleSummary = courses.map(c => `"${c.title}"`).join(', ');
+    addLog(`[Free Code] Kích hoạt nhóm khóa học ${titleSummary} miễn phí 100% bằng mã giảm giá...`, 'sys');
     setStep(3);
     setTimeout(() => {
-      addLog(`[Free Code] Kích hoạt thành công! Đã mở khóa khóa học: "${course.title}"`, 'sys');
-      onPaymentSuccess(course.id);
+      addLog(`[Free Code] Kích hoạt thành công! Đã mở khóa nhóm khóa học: ${titleSummary}`, 'sys');
+      onPaymentSuccess(courses.map(c => c.id));
       setStep(4);
     }, 1200);
   };
 
   const handleSimulatePayment = () => {
-    addLog(`[Demo Mode] Tiến hành mô phỏng thanh toán khóa học "${course.title}"...`, 'sys');
+    const titleSummary = courses.map(c => `"${c.title}"`).join(', ');
+    addLog(`[Demo Mode] Tiến hành mô phỏng thanh toán nhóm khóa học ${titleSummary}...`, 'sys');
     setStep(3);
     setTimeout(() => {
-      addLog(`[Demo Mode] Xác nhận thành công! Đã kích hoạt quyền sở hữu khóa học "${course.title}".`, 'sys');
+      addLog(`[Demo Mode] Xác nhận thành công! Đã kích hoạt quyền sở hữu nhóm khóa học.`, 'sys');
       setStep(4);
-      onPaymentSuccess(course.id);
+      onPaymentSuccess(courses.map(c => c.id));
     }, 1500);
   };
 
@@ -133,12 +136,14 @@ export default function CheckoutModal({ course, onClose, onPaymentSuccess, addLo
     addLog(`[SePay] Học sinh yêu cầu kiểm tra sao kê thủ công giao dịch: ${transferCode}`, 'sys');
     
     const token = localStorage.getItem('access_token');
-    if (!token) {
+    const courseId = courses[0]?.id;
+
+    if (!token || !courseId) {
       // Fallback to simulation in mock/demo mode when no token is present
       setTimeout(() => {
-        addLog(`[Demo Mode] Xác nhận thành công! Đã kích hoạt quyền sở hữu khóa học "${course.title}".`, 'sys');
+        addLog(`[Demo Mode] Xác nhận thành công! Đã kích hoạt quyền sở hữu nhóm khóa học.`, 'sys');
         setStep(4);
-        onPaymentSuccess(course.id);
+        onPaymentSuccess(courses.map(c => c.id));
         setIsVerifying(false);
       }, 1500);
       return;
@@ -155,20 +160,20 @@ export default function CheckoutModal({ course, onClose, onPaymentSuccess, addLo
       const data = await res.json();
       
       if (data.success && data.data?.isEnrolled) {
-        addLog(`[SePay] Chuyển khoản thành công! Đã mở khóa khóa học: "${course.title}"`, 'sys');
+        addLog(`[SePay] Chuyển khoản thành công! Đã mở khóa nhóm khóa học.`, 'sys');
         setStep(4);
-        onPaymentSuccess(course.id);
+        onPaymentSuccess(courses.map(c => c.id));
       } else {
         // In demo/development, if the webhook isn't fully set up or processing, automatically approve to proceed.
         addLog(`[SePay] Giao dịch "${transferCode}" chưa xuất hiện. Tự động mô phỏng thanh toán thành công...`, 'sys');
         setStep(4);
-        onPaymentSuccess(course.id);
+        onPaymentSuccess(courses.map(c => c.id));
       }
     } catch (err) {
       // If backend is offline or network error, fallback to simulation so flow is not blocked!
       addLog(`[SePay] Lỗi kết nối máy chủ. Tự động mô phỏng thanh toán thành công...`, 'sys');
       setStep(4);
-      onPaymentSuccess(course.id);
+      onPaymentSuccess(courses.map(c => c.id));
     } finally {
       setIsVerifying(false);
     }
@@ -180,458 +185,502 @@ export default function CheckoutModal({ course, onClose, onPaymentSuccess, addLo
     setTimeout(() => setCopiedField(null), 1500);
   };
 
-  const formatTime = (secs) => {
-    const mins = Math.floor(secs / 60);
-    const rs = secs % 60;
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const rs = seconds % 60;
     return `${mins}:${rs < 10 ? '0' : ''}${rs}`;
   };
 
-  return (
-    <div className="checkout-overlay" style={{
-      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(5px)',
-      display: 'flex', justifyContent: 'center', alignItems: 'center',
-      zIndex: 1050, padding: '16px'
-    }}>
-      <div className="checkout-modal animate-in" style={{
-        background: 'var(--bg-card)', border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-lg)', boxShadow: '0 20px 45px rgba(0,0,0,0.15)',
-        width: '100%', maxWidth: '820px', position: 'relative', overflow: 'hidden',
-        padding: '24px'
-      }}>
-        
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          style={{
-            position: 'absolute', top: '16px', right: '16px',
-            border: 'none', background: 'none', color: 'var(--text-secondary)',
-            fontSize: '20px', cursor: 'pointer', zIndex: 10
-          }}
-        >
-          <HiX />
-        </button>
+  if (courses.length === 0) return null;
 
+  return (
+    <div className="checkout-fullscreen-overlay" style={{
+      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+      background: 'var(--bg-main, #FAF6EE)', display: 'flex', flexDirection: 'column',
+      zIndex: 2000, overflowY: 'auto', fontFamily: "'Outfit', 'Inter', sans-serif"
+    }}>
+      
+      {/* ── HEADER ── */}
+      <header style={{
+        padding: '20px 40px',
+        borderBottom: '3px solid #000',
+        background: '#FAF6EE',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexShrink: 0
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{
+            width: '38px', height: '38px', borderRadius: '8px',
+            background: '#7C3AED', color: '#fff', fontSize: '18px', fontWeight: '900',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            border: '2.5px solid #000000', boxShadow: '2px 2px 0px #000000'
+          }}>
+            E
+          </div>
+          <div>
+            <h1 style={{ fontSize: '18px', fontWeight: '950', color: '#000000', margin: 0 }}>EduPath AI</h1>
+            <p style={{ fontSize: '10px', color: '#555', margin: 0, fontWeight: 'bold' }}>Thanh toán đơn hàng</p>
+          </div>
+        </div>
+
+        {step < 4 && (
+          <button
+            onClick={onClose}
+            style={{
+              background: '#FFFFFF',
+              border: '2.5px solid #000',
+              borderRadius: '8px',
+              padding: '8px 16px',
+              fontSize: '13px',
+              fontWeight: '900',
+              cursor: 'pointer',
+              boxShadow: '3px 3px 0px #000',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.15s'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translate(-1px, -1px)';
+              e.currentTarget.style.boxShadow = '4px 4px 0px #000';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'none';
+              e.currentTarget.style.boxShadow = '3px 3px 0px #000';
+            }}
+          >
+            <HiChevronLeft style={{ fontSize: '18px' }} /> Quay lại học tập
+          </button>
+        )}
+      </header>
+
+      {/* ── MAIN BODY ── */}
+      <main style={{ flex: 1, padding: '40px', boxSizing: 'border-box', maxWidth: '1280px', width: '100%', margin: '0 auto' }}>
+        
         {/* STEP 1: Cart view */}
         {step === 1 && (
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px', borderBottom: '2px solid var(--border)', paddingBottom: '8px' }}>
-              <span style={{ fontSize: '24px' }}>🛒</span>
-              <h3 style={{ fontSize: '20px', fontWeight: '900', color: 'var(--text-primary)', margin: 0 }}>
-                GIỎ HÀNG CỦA BẠN
-              </h3>
-            </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '40px', alignItems: 'start' }}>
             
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '20px' }}>
-              {/* Item Card */}
+            {/* Cột trái: Danh sách khóa học */}
+            <div style={{ flex: '1 1 650px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <div style={{
-                background: 'var(--bg-main)',
-                border: '2px solid var(--border)',
-                borderRadius: 'var(--radius-md)',
-                padding: '16px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '16px',
-                boxShadow: 'var(--shadow-sm)'
+                background: '#fff', border: '3px solid #000', borderRadius: '16px',
+                padding: '28px', boxShadow: '5px 5px 0px #000'
               }}>
-                <div style={{
-                  width: '60px',
-                  height: '60px',
-                  background: 'linear-gradient(135deg, var(--primary), var(--primary-light))',
-                  borderRadius: '12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  fontSize: '24px',
-                  fontWeight: 'bold',
-                  flexShrink: 0
-                }}>
-                  {course.subject?.slice(0, 1) || '📚'}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <h4 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)' }}>
-                    {course.title}
-                  </h4>
-                  <div style={{ display: 'flex', gap: '12px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    <span>Môn: <strong>{course.subject}</strong></span>
-                    <span>•</span>
-                    <span>Giảng viên: <strong>{course.teacherName || course.instructor?.name || 'Cố vấn EduPath'}</strong></span>
-                  </div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <span style={{ fontSize: '16px', fontWeight: '900', color: 'var(--text-primary)' }}>
-                    {originalAmount.toLocaleString('vi-VN')}đ
-                  </span>
+                <h2 style={{ fontSize: '22px', fontWeight: '950', color: '#000', margin: '0 0 20px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>🛒</span> Giỏ hàng của em ({courses.length} sản phẩm)
+                </h2>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {courses.map((c) => {
+                    const price = parsePrice(c.priceSale || c.price || c.priceOriginal);
+                    return (
+                      <div 
+                        key={c.id} 
+                        style={{
+                          background: '#FFFDF9',
+                          border: '2px solid #000',
+                          borderRadius: '12px',
+                          padding: '16px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '16px',
+                          position: 'relative',
+                          boxShadow: '2px 2px 0px #000'
+                        }}
+                      >
+                        <div style={{
+                          width: '48px', height: '48px', borderRadius: '8px',
+                          background: 'linear-gradient(135deg, #7C3AED, #4F46E5)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: '#fff', fontSize: '18px', fontWeight: 'bold', border: '2px solid #000', flexShrink: 0
+                        }}>
+                          {c.subject?.slice(0, 1) || '📚'}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <h4 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: '900', color: '#000' }}>
+                            {c.title}
+                          </h4>
+                          <p style={{ margin: 0, fontSize: '12px', color: '#555', fontWeight: '700' }}>
+                            Môn: {c.subject} • Giáo viên: {c.teacherName || c.instructor?.name || 'Cố vấn EduPath'}
+                          </p>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                          <span style={{ fontSize: '16px', fontWeight: '950', color: '#000' }}>
+                            {price.toLocaleString('vi-VN')}đ
+                          </span>
+                          <button
+                            onClick={() => onRemoveCourse(c.id)}
+                            style={{
+                              border: '2px solid #000',
+                              background: '#FFEAA7',
+                              borderRadius: '8px',
+                              width: '32px',
+                              height: '32px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              boxShadow: '1.5px 1.5px 0px #000',
+                              transition: 'all 0.1s'
+                            }}
+                            title="Xóa khỏi giỏ hàng"
+                            onMouseEnter={(e) => { e.currentTarget.style.background = '#ff7675'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = '#FFEAA7'; }}
+                          >
+                            <HiTrash style={{ fontSize: '16px', color: '#000' }} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
+            </div>
 
-              {/* Promo Code Input Row */}
+            {/* Cột phải: Tính tiền & Thanh toán */}
+            <div style={{ flex: '1 1 350px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              
+              {/* Promo Code */}
               <div style={{
-                border: '2px dashed var(--border)',
-                borderRadius: 'var(--radius-md)',
-                padding: '16px',
-                background: 'var(--bg-card)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '10px'
+                background: '#fff', border: '3px solid #000', borderRadius: '16px',
+                padding: '24px', boxShadow: '5px 5px 0px #000'
               }}>
-                <label style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--text-primary)' }}>
-                  Mã giảm giá (nếu có):
-                </label>
+                <h3 style={{ fontSize: '15px', fontWeight: '900', color: '#000', margin: '0 0 12px 0' }}>
+                  🎟️ Mã giảm giá / Ưu đãi
+                </h3>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <input
                     type="text"
                     className="form-control"
-                    placeholder="Nhập mã giảm giá (VD: EDUPATH2026)..."
+                    placeholder="Nhập mã ưu đãi..."
                     value={promoCode}
                     onChange={(e) => setPromoCode(e.target.value)}
-                    style={{ flex: 1, padding: '10px', textTransform: 'uppercase' }}
+                    style={{ flex: 1, padding: '10px', border: '2px solid #000', borderRadius: '8px', textTransform: 'uppercase', fontWeight: 'bold' }}
                   />
                   <button
                     type="button"
-                    className="btn-primary"
                     onClick={handleApplyPromoCode}
-                    style={{ padding: '0 20px', height: 'auto' }}
+                    style={{
+                      background: '#7C3AED', color: '#fff', border: '2px solid #000',
+                      borderRadius: '8px', padding: '0 16px', fontWeight: '900', cursor: 'pointer',
+                      boxShadow: '2px 2px 0px #000'
+                    }}
                   >
                     Áp dụng
                   </button>
                 </div>
                 {promoStatus === 'success' && (
-                  <span style={{ fontSize: '12.5px', color: 'var(--accent-green)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    ✓ Áp dụng mã giảm giá thành công! Giảm {discountPercent}% ({discountPercent === 100 ? 'Khuyến mãi đặc biệt' : 'Khuyến mãi THPTQG'}).
-                  </span>
+                  <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: 'var(--accent-green)', fontWeight: 'bold' }}>
+                    ✓ Áp dụng thành công! Giảm {discountPercent}% ({discountPercent === 100 ? 'Miễn phí đặc biệt' : 'Mã THPTQG'}).
+                  </p>
                 )}
                 {promoStatus === 'invalid' && (
-                  <span style={{ fontSize: '12.5px', color: 'var(--accent-red)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    ✗ Mã giảm giá không chính xác hoặc đã hết hạn.
-                  </span>
+                  <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: 'var(--accent-red)', fontWeight: 'bold' }}>
+                    ✗ Mã giảm giá không đúng hoặc hết hạn.
+                  </p>
                 )}
               </div>
 
-              {/* Price Calculation details */}
+              {/* Hóa đơn tính tiền */}
               <div style={{
-                background: 'var(--bg-main)',
-                border: '2px solid var(--border)',
-                borderRadius: 'var(--radius-md)',
-                padding: '16px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '10px'
+                background: '#fff', border: '3px solid #000', borderRadius: '16px',
+                padding: '24px', boxShadow: '5px 5px 0px #000'
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13.5px', color: 'var(--text-secondary)' }}>
-                  <span>Tạm tính (Subtotal):</span>
-                  <span style={{ float: 'right' }}>{originalAmount.toLocaleString('vi-VN')}đ</span>
-                </div>
-                {discountAmount > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13.5px', color: 'var(--accent-red)', fontWeight: 'bold' }}>
-                    <span>Giảm giá (Discount -{discountPercent}%):</span>
-                    <span style={{ float: 'right' }}>-{discountAmount.toLocaleString('vi-VN')}đ</span>
+                <h3 style={{ fontSize: '16px', fontWeight: '950', color: '#000', margin: '0 0 16px 0', borderBottom: '2.5px solid #000', paddingBottom: '8px' }}>
+                  Chi tiết hóa đơn
+                </h3>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', color: '#555', fontWeight: '700' }}>
+                    <span>Tạm tính:</span>
+                    <span>{originalAmount.toLocaleString('vi-VN')}đ</span>
                   </div>
-                )}
-                <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', fontWeight: '950', color: 'var(--text-primary)' }}>
-                  <span>Tổng thanh toán:</span>
-                  <span style={{ float: 'right', color: 'var(--accent-orange)' }}>{finalAmount.toLocaleString('vi-VN')}đ</span>
+                  {discountAmount > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', color: 'var(--accent-red)', fontWeight: 'bold' }}>
+                      <span>Giảm giá (-{discountPercent}%):</span>
+                      <span>-{discountAmount.toLocaleString('vi-VN')}đ</span>
+                    </div>
+                  )}
+                  <div style={{ height: '1.5px', background: '#000', margin: '4px 0' }} />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '18px', fontWeight: '950', color: '#000' }}>
+                    <span>Tổng cộng:</span>
+                    <span style={{ color: '#E67E22' }}>{finalAmount.toLocaleString('vi-VN')}đ</span>
+                  </div>
                 </div>
-              </div>
-            </div>
 
-            {/* Actions */}
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                className="btn-outline"
-                onClick={onClose}
-                style={{ padding: '12px 24px' }}
-              >
-                Tiếp tục chọn khóa học
-              </button>
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={finalAmount === 0 ? handleFreeCheckout : () => setStep(2)}
-                style={{ padding: '12px 32px' }}
-              >
-                {finalAmount === 0 ? 'Nhận khóa học miễn phí ➔' : 'Xác nhận thanh toán ➔'}
-              </button>
+                <button
+                  type="button"
+                  onClick={finalAmount === 0 ? handleFreeCheckout : () => setStep(2)}
+                  style={{
+                    width: '100%', padding: '14px', background: '#FFE259',
+                    color: '#000', border: '3.5px solid #000', borderRadius: '12px',
+                    fontSize: '15px', fontWeight: '950', cursor: 'pointer',
+                    boxShadow: '4px 4px 0px #000', transition: 'all 0.15s',
+                    textAlign: 'center'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translate(-2px, -2px)';
+                    e.currentTarget.style.boxShadow = '6px 6px 0px #000';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'none';
+                    e.currentTarget.style.boxShadow = '4px 4px 0px #000';
+                  }}
+                >
+                  {finalAmount === 0 ? 'NHẬN KHÓA HỌC MIỄN PHÍ ➔' : 'TIẾN HÀNH THANH TOÁN ➔'}
+                </button>
+              </div>
+
             </div>
           </div>
         )}
 
-        {/* STEP 2: Bank Transfer details & VietQR */}
+        {/* STEP 2: Bank Transfer & VietQR */}
         {step === 2 && (
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <HiSparkles style={{ color: 'var(--accent-orange)', fontSize: '20px' }} />
-              <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--text-primary)', margin: 0 }}>
-                Thanh toán tự động SePay
-              </h3>
-            </div>
+          <div style={{
+            background: '#fff', border: '3px solid #000', borderRadius: '16px',
+            padding: '40px', boxShadow: '6px 6px 0px #000', display: 'flex', flexWrap: 'wrap', gap: '40px'
+          }}>
             
-            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px', lineHeight: 1.4 }}>
-              Bạn đang mua khóa học: <strong style={{ color: 'var(--primary)' }}>{course.title}</strong>
-            </p>
- 
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '28px', alignItems: 'start' }}>
-              {/* CỘT TRÁI: Thông tin chuyển khoản & Thẻ Ngân hàng */}
-              <div style={{ flex: '1 1 380px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                {/* Price section */}
-                <div style={{
-                  background: 'var(--bg-main)', padding: '12px 16px',
-                  borderRadius: 'var(--radius-md)', border: '1px solid var(--border)'
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', marginBottom: '4px' }}>
-                    <span>Giá niêm yết:</span>
-                    <span style={{ textDecoration: 'line-through', color: 'var(--text-muted)' }}>{originalAmount.toLocaleString()}đ</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14.5px', fontWeight: 'bold' }}>
-                    <span>Thành tiền:</span>
-                    <span style={{ color: 'var(--accent-orange)' }}>{finalAmount.toLocaleString()}đ</span>
-                  </div>
+            {/* Cột trái: Mock card & Thông tin tài khoản */}
+            <div style={{ flex: '1 1 500px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <h2 style={{ fontSize: '22px', fontWeight: '950', color: '#000', margin: 0 }}>
+                💳 Chuyển khoản ngân hàng qua cổng SePay
+              </h2>
+              <p style={{ fontSize: '13.5px', color: '#555', margin: 0, fontWeight: '700', lineHeight: 1.5 }}>
+                Em vui lòng chuyển khoản đúng số tiền và nội dung chuyển khoản bên dưới. Giao dịch sẽ được kiểm tra và kích hoạt hoàn toàn tự động sau 15 - 30 giây.
+              </p>
+
+              {/* Debit Card */}
+              <div style={{
+                background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+                borderRadius: '20px',
+                padding: '24px',
+                color: '#fff',
+                position: 'relative',
+                overflow: 'hidden',
+                boxShadow: '0 12px 28px rgba(0,0,0,0.25)',
+                border: '3px solid #000'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                  <span style={{ fontSize: '15px', fontWeight: '950', letterSpacing: '1px', color: '#FFE259' }}>
+                    🏦 ACB BANK
+                  </span>
+                  <span style={{ fontSize: '9px', fontWeight: 'bold', background: 'rgba(255,255,255,0.2)', padding: '4px 10px', borderRadius: '6px' }}>
+                    PREMIUM MEMBER
+                  </span>
                 </div>
- 
-                {/* Elegant CSS Banking Card Mockup */}
+
                 <div style={{
-                  background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-                  borderRadius: '16px',
-                  padding: '18px',
-                  color: '#fff',
-                  position: 'relative',
-                  overflow: 'hidden',
-                  boxShadow: '0 12px 24px rgba(0,0,0,0.15)',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  fontFamily: '"SF Pro Display", -apple-system, sans-serif'
-                }}>
-                  {/* Card glossy reflection overlay */}
-                  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 50%)', pointerEvents: 'none' }} />
-                  
-                  {/* Header: Bank & Card Type */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <span style={{ fontSize: '14px', fontWeight: '800', letterSpacing: '1px', color: '#ffa751', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      🏦 ACB BANK
-                    </span>
-                    <span style={{ fontSize: '9px', fontWeight: 'bold', background: 'rgba(255,255,255,0.15)', padding: '3px 8px', borderRadius: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      Premium Debit
-                    </span>
-                  </div>
- 
-                  {/* EMV Chip Mockup */}
-                  <div style={{
-                    width: '32px', height: '24px',
-                    background: 'linear-gradient(135deg, #ffe259 0%, #ffa751 100%)',
-                    borderRadius: '4px',
-                    position: 'relative',
-                    marginBottom: '10px',
-                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3)'
-                  }}>
-                    <div style={{ position: 'absolute', top: '4px', bottom: '4px', left: '10px', right: '10px', borderLeft: '1px solid rgba(0,0,0,0.15)', borderRight: '1px solid rgba(0,0,0,0.15)' }} />
-                    <div style={{ position: 'absolute', left: '4px', right: '4px', top: '8px', bottom: '8px', borderTop: '1px solid rgba(0,0,0,0.15)', borderBottom: '1px solid rgba(0,0,0,0.15)' }} />
-                  </div>
- 
-                  {/* Card Number */}
-                  <div style={{ fontSize: '18px', fontWeight: 'bold', letterSpacing: '3px', fontFamily: 'monospace', marginBottom: '12px', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
-                    {ACCOUNT_NO}
-                  </div>
- 
-                  {/* Footer: Cardholder & Expiry */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                    <div>
-                      <div style={{ fontSize: '8px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', marginBottom: '2px' }}>Chủ tài khoản</div>
-                      <div style={{ fontSize: '13px', fontWeight: 'bold', letterSpacing: '0.5px' }}>{ACCOUNT_NAME}</div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: '8px', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', marginBottom: '2px' }}>Trạng thái</div>
-                      <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#22c55e' }}>ĐANG LIÊN KẾT</div>
-                    </div>
-                  </div>
+                  width: '38px', height: '28px',
+                  background: 'linear-gradient(135deg, #FFE259 0%, #FFA751 100%)',
+                  borderRadius: '6px',
+                  marginBottom: '16px',
+                  border: '1.5px solid #000'
+                }} />
+
+                <div style={{ fontSize: '22px', fontWeight: 'bold', letterSpacing: '3px', fontFamily: 'monospace', marginBottom: '16px' }}>
+                  {ACCOUNT_NO}
                 </div>
- 
-                {/* Bank details panel */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {/* Account Number */}
-                  <div style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    background: 'var(--bg-card)', border: '1px solid var(--border)',
-                    padding: '8px 12px', borderRadius: 'var(--radius-md)'
-                  }}>
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                      <div>Số tài khoản ({BANK_ID}):</div>
-                      <strong style={{ fontSize: '14.5px', color: 'var(--text-primary)' }}>{ACCOUNT_NO}</strong>
-                    </div>
-                    <button
-                      className="btn-outline"
-                      onClick={() => handleCopy(ACCOUNT_NO, 'no')}
-                      style={{ padding: '4px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
-                    >
-                      {copiedField === 'no' ? <><HiCheck /> Đã lưu</> : <><HiDuplicate /> Sao chép</>}
-                    </button>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                  <div>
+                    <div style={{ fontSize: '8px', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', marginBottom: '2px' }}>Chủ tài khoản</div>
+                    <div style={{ fontSize: '14px', fontWeight: 'bold' }}>{ACCOUNT_NAME}</div>
                   </div>
- 
-                  {/* Transfer Code */}
-                  <div style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    background: 'var(--bg-card)', border: '1px solid var(--border)',
-                    padding: '8px 12px', borderRadius: 'var(--radius-md)'
-                  }}>
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                      <div>Nội dung chuyển khoản (Bắt buộc):</div>
-                      <strong style={{ fontSize: '15px', color: 'var(--accent-red)', letterSpacing: '1px' }}>{transferCode}</strong>
-                    </div>
-                    <button
-                      className="btn-outline"
-                      onClick={() => handleCopy(transferCode, 'code')}
-                      style={{ padding: '4px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
-                    >
-                      {copiedField === 'code' ? <><HiCheck /> Đã lưu</> : <><HiDuplicate /> Sao chép</>}
-                    </button>
+                  <div>
+                    <div style={{ fontSize: '8px', color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase', marginBottom: '2px' }}>Số tiền thanh toán</div>
+                    <div style={{ fontSize: '15px', fontWeight: '900', color: '#FFE259' }}>{finalAmount.toLocaleString()}đ</div>
                   </div>
- 
-                  {/* Account Holder */}
-                  <div style={{
-                    display: 'flex', justifyContent: 'space-between',
-                    fontSize: '12px', color: 'var(--text-secondary)',
-                    padding: '2px 12px'
-                  }}>
-                    <span>Chủ tài khoản:</span>
-                    <strong style={{ color: 'var(--text-primary)' }}>{ACCOUNT_NAME}</strong>
-                  </div>
-                </div>
- 
-                {/* Vào học DEMO Link */}
-                <div style={{
-                  background: 'var(--emerald-light)',
-                  padding: '12px 16px',
-                  borderRadius: '12px',
-                  border: '1px solid rgba(5, 150, 105, 0.15)',
-                  fontSize: '13px',
-                  textAlign: 'center',
-                  marginTop: '4px'
-                }}>
-                  Bạn muốn dùng thử trước?{' '}
-                  <a
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      onClose();
-                      window.history.pushState({}, '', `/learn/${course.id}?demo=true`);
-                      window.dispatchEvent(new PopStateEvent('popstate'));
-                    }}
-                    style={{
-                      color: 'var(--emerald-primary)',
-                      fontWeight: '800',
-                      textDecoration: 'underline'
-                    }}
-                  >
-                    Vào học thử DEMO ngay!
-                  </a>
                 </div>
               </div>
- 
-              {/* CỘT PHẢI: VietQR & Quét mã thanh toán */}
-              <div style={{ flex: '1 1 300px', display: 'flex', flexDirection: 'column', gap: '14px', alignItems: 'center' }}>
-                {/* Dynamic VietQR code */}
+
+              {/* Copy details */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                
+                {/* Account No */}
                 <div style={{
-                  background: '#fff', padding: '16px', borderRadius: 'var(--radius-lg)',
-                  display: 'flex', flexDirection: 'column', alignItems: 'center',
-                  justifyContent: 'center', border: '1px solid var(--border)',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.05)', width: '100%'
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  background: '#FFFDF9', border: '2px solid #000', borderRadius: '12px',
+                  padding: '12px 18px', boxShadow: '2px 2px 0px #000'
                 }}>
-                  <img 
-                    src={qrCodeUrl} 
-                    alt="VietQR Code" 
-                    style={{ width: '200px', height: '200px', objectFit: 'contain' }}
-                  />
-                  <p style={{ fontSize: '11.5px', color: '#636e72', fontWeight: 600, marginTop: '8px', textAlign: 'center', margin: '8px 0 0 0' }}>
-                    Quét mã QR để điền tự động Số tiền & Nội dung
-                  </p>
-                </div>
- 
-                {/* Timer countdown & Polling Status indicator */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', padding: '0 4px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <span className="pulse-green"></span>
-                    <span style={{ fontSize: '11.5px', color: 'var(--accent-green)', fontWeight: 600 }}>
-                      Đang đợi giao dịch...
-                    </span>
+                  <div>
+                    <span style={{ fontSize: '11px', color: '#555', fontWeight: 'bold', display: 'block', textTransform: 'uppercase' }}>Số tài khoản:</span>
+                    <strong style={{ fontSize: '16px', color: '#000' }}>{ACCOUNT_NO}</strong>
                   </div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                    Thời gian: <span style={{ color: 'var(--accent-red)', fontWeight: 'bold' }}>{formatTime(seconds)}</span>
-                  </div>
-                </div>
- 
-                {pollingError && (
-                  <p style={{ color: 'var(--accent-red)', fontSize: '12px', fontWeight: 500, margin: 0, textAlign: 'center' }}>
-                    ⚠️ {pollingError}
-                  </p>
-                )}
- 
-                {/* Main Action Buttons */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
-                  <button 
-                    className="btn-primary" 
-                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }} 
-                    onClick={handleManualCheck}
-                    disabled={isVerifying}
+                  <button
+                    onClick={() => handleCopy(ACCOUNT_NO, 'no')}
+                    style={{
+                      background: '#FFF', border: '2px solid #000', borderRadius: '8px',
+                      padding: '6px 12px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px',
+                      boxShadow: '1.5px 1.5px 0px #000'
+                    }}
                   >
-                    <HiRefresh className={isVerifying ? 'spin' : ''} /> 
-                    {isVerifying ? 'Đang đối soát...' : 'Tôi đã chuyển khoản'}
+                    {copiedField === 'no' ? <><HiCheck /> Đã sao chép</> : <><HiDuplicate /> Sao chép</>}
                   </button>
-                  
-                  <button className="btn-outline" style={{ width: '100%' }} onClick={() => setStep(1)} disabled={isVerifying}>
-                    Quay lại Giỏ hàng
+                </div>
+
+                {/* Transfer Message */}
+                <div style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  background: '#FFFDF9', border: '2px solid #000', borderRadius: '12px',
+                  padding: '12px 18px', boxShadow: '2px 2px 0px #000'
+                }}>
+                  <div>
+                    <span style={{ fontSize: '11px', color: '#555', fontWeight: 'bold', display: 'block', textTransform: 'uppercase' }}>Nội dung chuyển khoản (Bắt buộc):</span>
+                    <strong style={{ fontSize: '17px', color: 'var(--accent-red)', letterSpacing: '1px' }}>{transferCode}</strong>
+                  </div>
+                  <button
+                    onClick={() => handleCopy(transferCode, 'code')}
+                    style={{
+                      background: '#FFF', border: '2px solid #000', borderRadius: '8px',
+                      padding: '6px 12px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px',
+                      boxShadow: '1.5px 1.5px 0px #000'
+                    }}
+                  >
+                    {copiedField === 'code' ? <><HiCheck /> Đã sao chép</> : <><HiDuplicate /> Sao chép</>}
                   </button>
                 </div>
               </div>
             </div>
- 
+
+            {/* Cột phải: VietQR Code */}
+            <div style={{ flex: '1 1 350px', display: 'flex', flexDirection: 'column', gap: '20px', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{
+                background: '#fff', border: '3px solid #000', borderRadius: '16px',
+                padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center',
+                boxShadow: '4px 4px 0px #000', width: '100%', maxWidth: '340px'
+              }}>
+                <img 
+                  src={qrCodeUrl} 
+                  alt="VietQR Code" 
+                  style={{ width: '220px', height: '220px', objectFit: 'contain' }}
+                />
+                <p style={{ fontSize: '12px', color: '#555', fontWeight: 'bold', marginTop: '12px', textAlign: 'center', margin: '12px 0 0 0' }}>
+                  Quét mã QR bằng ứng dụng Ngân hàng (Mobile Banking) để điền tự động thông tin chuyển khoản.
+                </p>
+              </div>
+
+              {/* Waiting status */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', maxWidth: '340px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span className="pulse-green"></span>
+                  <span style={{ fontSize: '13px', color: 'var(--accent-green)', fontWeight: 'bold' }}>
+                    Đang quét sao kê ngân hàng...
+                  </span>
+                </div>
+                <div style={{ fontSize: '12.5px', color: '#555', fontWeight: 'bold' }}>
+                  Đếm ngược: <span style={{ color: 'var(--accent-red)' }}>{formatTime(seconds)}</span>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%', maxWidth: '340px' }}>
+                <button 
+                  onClick={handleManualCheck}
+                  disabled={isVerifying}
+                  style={{
+                    width: '100%', padding: '12px', background: '#7C3AED', color: '#fff',
+                    border: '2.5px solid #000', borderRadius: '10px', fontWeight: 'bold', fontSize: '14px',
+                    boxShadow: '3px 3px 0px #000', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                  }}
+                >
+                  <HiRefresh className={isVerifying ? 'spin' : ''} /> 
+                  {isVerifying ? 'Đang xác thực giao dịch...' : 'Xác thực tôi đã chuyển khoản'}
+                </button>
+                <button 
+                  onClick={() => setStep(1)} 
+                  disabled={isVerifying}
+                  style={{
+                    width: '100%', padding: '10px', background: '#FFF', color: '#000',
+                    border: '2.5px solid #000', borderRadius: '10px', fontWeight: 'bold', fontSize: '13px',
+                    boxShadow: '3px 3px 0px #000', cursor: 'pointer'
+                  }}
+                >
+                  Quay lại chỉnh sửa Giỏ hàng
+                </button>
+              </div>
+            </div>
           </div>
         )}
- 
-        {/* STEP 3: Verification processing splash screen */}
+
+        {/* STEP 3: Verification Splash */}
         {step === 3 && (
-          <div style={{ textAlign: 'center', padding: '30px 10px' }}>
+          <div style={{
+            background: '#fff', border: '3px solid #000', borderRadius: '16px',
+            padding: '60px', boxShadow: '5px 5px 0px #000', textAlign: 'center',
+            maxWidth: '600px', margin: '40px auto'
+          }}>
             <div style={{
-              width: '50px', height: '50px',
-              border: '4px solid var(--border)',
-              borderTopColor: 'var(--primary)',
+              width: '56px', height: '56px',
+              border: '5px solid #E2E8F0',
+              borderTopColor: '#7C3AED',
               borderRadius: '50%',
-              margin: '0 auto 20px auto',
+              margin: '0 auto 24px auto',
               animation: 'spin 1s linear infinite'
             }}></div>
-            <h3 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '8px', color: 'var(--text-primary)' }}>
-              Đang xác thực thanh toán...
+            <h3 style={{ fontSize: '20px', fontWeight: '950', marginBottom: '12px', color: '#000' }}>
+              ĐANG ĐỐI SOÁT GIAO DỊCH TỪ SEPAY...
             </h3>
-            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-              Hệ thống đang truy vấn sao kê tài khoản ngân hàng liên kết từ cổng SePay. Vui lòng giữ nguyên màn hình trong giây lát.
+            <p style={{ fontSize: '13.5px', color: '#555', lineHeight: '1.6', margin: 0, fontWeight: '700' }}>
+              Hệ thống đang kiểm tra tự động sao kê tài khoản ngân hàng liên kết. Vui lòng giữ kết nối trong vài giây, EduPath AI sẽ mở khóa toàn bộ khóa học ngay sau khi nhận được tiền.
             </p>
           </div>
         )}
- 
+
         {/* STEP 4: Success unlock screen */}
         {step === 4 && (
-          <div style={{ textAlign: 'center', padding: '24px 10px' }}>
-            <div style={{ fontSize: '64px', color: 'var(--accent-green)', marginBottom: '14px' }}>
+          <div style={{
+            background: '#fff', border: '3px solid #000', borderRadius: '16px',
+            padding: '50px 30px', boxShadow: '6px 6px 0px #000', textAlign: 'center',
+            maxWidth: '650px', margin: '40px auto'
+          }}>
+            <div style={{ fontSize: '80px', color: 'var(--accent-green)', marginBottom: '20px', display: 'flex', justifyContent: 'center' }}>
               <HiCheckCircle />
             </div>
-            <h3 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '8px', color: 'var(--text-primary)' }}>
-              Kích hoạt thành công! 🎉
+            <h3 style={{ fontSize: '24px', fontWeight: '950', marginBottom: '12px', color: '#000' }}>
+              MỞ KHÓA THÀNH CÔNG! 🎉
             </h3>
-            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '20px', lineHeight: '1.5' }}>
-              Cảm ơn em! Khóa học <strong style={{ color: 'var(--primary)' }}>{course.title}</strong> đã được kích hoạt trên hệ thống. Hãy bắt đầu chinh phục kiến thức và nhận lộ trình học tập cá nhân hóa ngay nào!
+            <div style={{
+              background: '#F0FDF4', border: '2px solid #22c55e', borderRadius: '12px',
+              padding: '16px', marginBottom: '24px', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '8px'
+            }}>
+              <strong style={{ fontSize: '14px', color: '#15803d' }}>📚 Danh sách các khóa học đã mở khóa:</strong>
+              <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', color: '#15803d', fontWeight: 'bold' }}>
+                {courses.map(c => (
+                  <li key={c.id}>{c.title}</li>
+                ))}
+              </ul>
+            </div>
+            <p style={{ fontSize: '14px', color: '#555', marginBottom: '28px', lineHeight: '1.6', fontWeight: '700' }}>
+              Cảm ơn em đã tham gia học tập cùng EduPath AI! Hệ thống đã ghi nhận quyền sở hữu của em đối với các khóa học trên. Bắt đầu lộ trình học tập cá nhân hóa ngay nào!
             </p>
             <div style={{ display: 'flex', justifyContent: 'center' }}>
               <button 
-                className="btn-primary" 
-                style={{ display: 'flex', alignItems: 'center', gap: 6 }} 
                 onClick={onClose}
+                style={{
+                  padding: '14px 36px', background: '#7C3AED', color: '#fff',
+                  border: '3px solid #000', borderRadius: '12px', fontSize: '15px', fontWeight: '950',
+                  boxShadow: '4px 4px 0px #000', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px',
+                  transition: 'all 0.1s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translate(-2px, -2px)';
+                  e.currentTarget.style.boxShadow = '6px 6px 0px #000';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'none';
+                  e.currentTarget.style.boxShadow = '4px 4px 0px #000';
+                }}
               >
-                <HiLockOpen /> Vào học ngay
+                <HiLockOpen style={{ fontSize: '18px' }} /> Vào học ngay thôi!
               </button>
             </div>
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 }

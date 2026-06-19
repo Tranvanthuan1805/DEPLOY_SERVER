@@ -7,8 +7,14 @@ import { sendOTPEmail, sendResetPasswordEmail, sendResetPasswordOTPEmail, sendRo
 import { isDisposableEmail, isValidEmailFormat } from '../lib/disposable-domains.js';
 import { checkOtpSendRateLimit, recordOtpSend, checkResendCooldown, recordResendCooldown } from '../lib/rate-limiter.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'edupath_jwt_secret_key_2026';
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'edupath_jwt_refresh_secret_key_2026';
+if (!process.env.JWT_SECRET) {
+  throw new Error('FATAL: JWT_SECRET environment variable is missing!');
+}
+if (!process.env.JWT_REFRESH_SECRET) {
+  throw new Error('FATAL: JWT_REFRESH_SECRET environment variable is missing!');
+}
+const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 const JWT_TEMP_SECRET = process.env.JWT_TEMP_SECRET || 'edupath_jwt_temp_secret_2026';
 
 const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
@@ -17,7 +23,7 @@ const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
 // Helper: Sign Access + Refresh JWT Tokens
 // ─────────────────────────────────────────────────────────
 function signTokens(user: { id: number; email: string; fullName: string; role: string }) {
-  const accessToken = jwt.sign(user, JWT_SECRET, { expiresIn: '15m' });
+  const accessToken = jwt.sign(user, JWT_SECRET, { expiresIn: '24h' });
   const refreshToken = jwt.sign({ id: user.id }, JWT_REFRESH_SECRET, { expiresIn: '7d' });
   return { accessToken, refreshToken };
 }
@@ -196,7 +202,7 @@ export async function logout(req: Request, res: Response) {
 // SEND OTP (DB-persisted, bcrypt-hashed, rate-limited)
 // ═════════════════════════════════════════════════════════
 export async function sendOtp(req: Request, res: Response) {
-  const { email, fullName, password, role, subjectGroup, bio, phone } = req.body;
+  const { email, fullName, password, role, subjectGroup, bio, phone, referralCode } = req.body;
 
   if (!email || !password || !fullName) {
     return res.status(400).json({ success: false, error: 'Vui lòng điền đầy đủ thông tin.' });
@@ -268,7 +274,7 @@ export async function sendOtp(req: Request, res: Response) {
         email: email.toLowerCase(),
         otpHash,
         purpose: 'REGISTRATION',
-        payload: { email, fullName, password, role, subjectGroup, bio, phone },
+        payload: { email, fullName, password, role, subjectGroup, bio, phone, referralCode },
         expiresAt: new Date(Date.now() + OTP_TTL_MS)
       }
     });
@@ -469,7 +475,7 @@ export async function verifyOtpRegister(req: Request, res: Response) {
 
     // OTP is correct — create user account
     const payload = record.payload as any;
-    const { fullName, password, role, subjectGroup, bio } = payload || {};
+    const { fullName, password, role, subjectGroup, bio, referralCode } = payload || {};
 
     const passwordHash = await bcrypt.hash(password, 12);
     const assignedRole = role && ['STUDENT', 'TEACHER'].includes(role.toUpperCase())
@@ -477,6 +483,13 @@ export async function verifyOtpRegister(req: Request, res: Response) {
       : 'STUDENT';
 
     const user = await prisma.$transaction(async (tx) => {
+      let referrerAffiliate = null;
+      if (referralCode) {
+        referrerAffiliate = await tx.affiliate.findUnique({
+          where: { referralCode }
+        });
+      }
+
       const u = await tx.user.create({
         data: {
           email,
@@ -485,13 +498,24 @@ export async function verifyOtpRegister(req: Request, res: Response) {
           role: assignedRole as any,
           isActive: true,
           emailVerified: true,
-          onboardingComplete: true
+          onboardingComplete: true,
+          referredBy: referrerAffiliate ? referrerAffiliate.userId : null
         }
       });
       if (assignedRole === 'STUDENT') {
         await tx.student.create({ data: { userId: u.id, subjectGroup: subjectGroup || 'A01' } });
       } else if (assignedRole === 'TEACHER') {
         await tx.teacher.create({ data: { userId: u.id, isApproved: false, bio: bio || '' } });
+      }
+
+      if (referrerAffiliate) {
+        await tx.referral.create({
+          data: {
+            affiliateId: referrerAffiliate.userId,
+            referredUserId: u.id,
+            isConverted: false
+          }
+        });
       }
 
       // Mark OTP as used
@@ -603,7 +627,7 @@ export async function googleAuth(req: Request, res: Response) {
 // GOOGLE COMPLETE ONBOARDING (role selection + account creation)
 // ═════════════════════════════════════════════════════════
 export async function googleCompleteOnboarding(req: Request, res: Response) {
-  const { tempToken, role, subjectGroup } = req.body;
+  const { tempToken, role, subjectGroup, referralCode } = req.body;
 
   if (!tempToken || !role) {
     return res.status(400).json({ success: false, error: 'Thiếu token hoặc vai trò.' });
@@ -640,6 +664,13 @@ export async function googleCompleteOnboarding(req: Request, res: Response) {
     const randomHash = await bcrypt.hash(googleId + Date.now(), 12);
 
     const user = await prisma.$transaction(async (tx) => {
+      let referrerAffiliate = null;
+      if (referralCode) {
+        referrerAffiliate = await tx.affiliate.findUnique({
+          where: { referralCode }
+        });
+      }
+
       const u = await tx.user.create({
         data: {
           email,
@@ -650,7 +681,8 @@ export async function googleCompleteOnboarding(req: Request, res: Response) {
           role: assignedRole as any,
           isActive: true,
           emailVerified: true,
-          onboardingComplete: true
+          onboardingComplete: true,
+          referredBy: referrerAffiliate ? referrerAffiliate.userId : null
         }
       });
 
@@ -661,6 +693,16 @@ export async function googleCompleteOnboarding(req: Request, res: Response) {
       } else if (assignedRole === 'TEACHER') {
         await tx.teacher.create({
           data: { userId: u.id, isApproved: false, bio: '' }
+        });
+      }
+
+      if (referrerAffiliate) {
+        await tx.referral.create({
+          data: {
+            affiliateId: referrerAffiliate.userId,
+            referredUserId: u.id,
+            isConverted: false
+          }
         });
       }
 
@@ -1085,4 +1127,130 @@ export async function refreshToken(req: Request, res: Response) {
     return res.status(401).json({ success: false, error: 'Mã refresh token không hợp lệ hoặc đã hết hạn!' });
   }
 }
+
+export async function getMe(req: Request, res: Response) {
+  const userId = (req as any).user?.id;
+  if (!userId) {
+    return res.status(401).json({ success: false, error: 'Chưa xác thực!' });
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        student: {
+          include: {
+            enrollments: {
+              select: { courseId: true, paidAt: true, id: true }
+            }
+          }
+        },
+        teacher: true
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'Người dùng không tồn tại.' });
+    }
+
+    if (!user.isActive) {
+      return res.status(403).json({ success: false, error: 'Tài khoản đã bị khóa!' });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        ...buildUserPayload(user),
+        enrollments: user.student?.enrollments || []
+      }
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+export async function registerAffiliate(req: Request, res: Response) {
+  const { email, password, fullName, bankAccount, bankName, taxId } = req.body;
+
+  if (!email || !password || !fullName) {
+    return res.status(400).json({ success: false, error: 'Vui lòng điền đầy đủ email, mật khẩu và họ tên.' });
+  }
+
+  try {
+    const exists = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    if (exists) {
+      return res.status(400).json({ success: false, error: 'Email này đã được đăng ký!' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    // Generate unique referral code
+    const baseCode = fullName
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // remove accents
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, ''); // alphanumeric only
+    
+    let referralCode = baseCode || 'affiliate';
+    let codeExists = true;
+    while (codeExists) {
+      const code = referralCode + crypto.randomInt(1000, 9999).toString();
+      const existingAffiliate = await prisma.affiliate.findUnique({ where: { referralCode: code } });
+      if (!existingAffiliate) {
+        referralCode = code;
+        codeExists = false;
+      }
+    }
+
+    const user = await prisma.$transaction(async (tx) => {
+      const u = await tx.user.create({
+        data: {
+          email: email.toLowerCase(),
+          passwordHash,
+          fullName,
+          role: 'AFFILIATE',
+          isActive: true,
+          emailVerified: true,
+          onboardingComplete: true
+        }
+      });
+
+      await tx.affiliate.create({
+        data: {
+          userId: u.id,
+          referralCode,
+          bankAccount: bankAccount || null,
+          bankName: bankName || null,
+          taxId: taxId || null,
+          isApproved: false // Pending admin approval
+        }
+      });
+
+      return tx.user.findUnique({
+        where: { id: u.id },
+        include: { affiliate: true }
+      });
+    });
+
+    return res.status(201).json({
+      success: true,
+      data: {
+        message: 'Đăng ký tài khoản Đối tác (Affiliate) thành công! Hồ sơ đang chờ Quản trị viên phê duyệt.',
+        user: {
+          id: user?.id,
+          email: user?.email,
+          fullName: user?.fullName,
+          role: user?.role,
+          affiliate: {
+            referralCode: user?.affiliate?.referralCode,
+            isApproved: user?.affiliate?.isApproved
+          }
+        }
+      }
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+}
+
 

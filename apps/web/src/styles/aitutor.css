@@ -1485,3 +1485,14 @@
 .spinner-mini {
   vertical-align: middle;
 }
+
+/* Landing Page fullscreen height overrides */
+.lp-root .aitutor-page {
+  height: 100vh !important;
+}
+@media (max-width: 1200px) {
+  .lp-root .aitutor-page {
+    height: auto !important;
+    overflow-y: auto !important;
+  }
+}

@@ -50,9 +50,10 @@ const mapExam = (e) => {
     exam_type: isOfficial ? 'official' : 'mock',
     source: isOfficial ? 'Bộ GD&ĐT' : 'Trường chuyên',
     duration_minutes: e.duration,
+    grade: e.grade,
     total_questions: e.examQuestions ? e.examQuestions.length : (e.totalQuestions || 0),
     description: e.description || `Đề thi ôn luyện môn ${e.subject} thi tốt nghiệp THPT Quốc Gia.`,
-    status: 'published',
+    status: e.status || 'published',
     exam_subjects: {
       id: subjectId,
       name: e.subject,
@@ -91,6 +92,7 @@ const mapQuestion = (q, idx, examId) => {
     question_number: idx + 1,
     question_text: q.content,
     question_image_url: q.imageUrl || null,
+    audio_url: q.audioUrl || null,
     question_type: 'multiple_choice_single',
     difficulty: diffLabel,
     explanation: q.explanation || '',
@@ -151,6 +153,9 @@ export const mockExamService = {
       if (filters.examType && filters.examType !== 'All') {
         apiFilters.source = filters.examType === 'official' ? 'Bộ GD&ĐT' : 'Trường chuyên';
       }
+      if (filters.grade && filters.grade !== 'All') {
+        apiFilters.grade = Number(filters.grade);
+      }
 
       const list = await api.getExams(apiFilters);
       if (list && list.length > 0) {
@@ -188,6 +193,9 @@ export const mockExamService = {
     }
     if (filters.examType && filters.examType !== 'All') {
       result = result.filter(e => e.exam_type === filters.examType);
+    }
+    if (filters.grade && filters.grade !== 'All') {
+      result = result.filter(e => String(e.grade) === String(filters.grade));
     }
     if (filters.search) {
       const query = filters.search.toLowerCase();
@@ -572,6 +580,7 @@ export const mockExamService = {
             question_number: eq.order,
             question_text: q.content,
             question_image_url: q.imageUrl || null,
+            audio_url: q.audioUrl || null,
             question_type: 'multiple_choice_single',
             difficulty: q.difficulty === 'EASY' ? 'Dễ' : (q.difficulty === 'HARD' ? 'Khó' : 'Trung bình'),
             explanation: q.explanation || '',

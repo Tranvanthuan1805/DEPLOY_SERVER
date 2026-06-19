@@ -4,13 +4,15 @@ import MockExamFilters from '../components/mock-exams/MockExamFilters';
 import { mockExamService } from '../services/mockExamService';
 import { supabase } from '../lib/supabaseClient';
 import { getLocalData } from '../services/mockDb';
+import { api } from '../api';
 import { 
   HiBookOpen, 
   HiClipboardList, 
   HiAcademicCap, 
   HiOutlineFolderOpen, 
   HiSearch, 
-  HiCheckCircle 
+  HiCheckCircle,
+  HiX
 } from 'react-icons/hi';
 import { FaCalculator, FaGlobe, FaAtom, FaFlask, FaRobot } from 'react-icons/fa';
 
@@ -36,8 +38,21 @@ export default function MockExamsPage({ currentUser, onSelectExam, navigateTo, e
     search: '',
     subjectId: 'All',
     year: 'All',
-    examType: 'All'
+    examType: 'All',
+    grade: 'All'
   });
+
+  // Mistakes Bank state
+  const [activeTab, setActiveTab] = useState('list'); // 'list' or 'wrong'
+  const [wrongQuestions, setWrongQuestions] = useState([]);
+  const [wrongLoading, setWrongLoading] = useState(false);
+
+  // AI Similar Question practice state
+  const [similarModalOpen, setSimilarModalOpen] = useState(false);
+  const [similarQuestion, setSimilarQuestion] = useState(null);
+  const [similarLoading, setSimilarLoading] = useState(false);
+  const [similarSelectedOption, setSimilarSelectedOption] = useState(null);
+  const [similarAnswerSubmitted, setSimilarAnswerSubmitted] = useState(false);
 
   const loadSubjects = async () => {
     if (supabase) {
@@ -73,6 +88,9 @@ export default function MockExamsPage({ currentUser, onSelectExam, navigateTo, e
         if (filters.examType && filters.examType !== 'All') {
           result = result.filter(e => e.exam_type === filters.examType);
         }
+        if (filters.grade && filters.grade !== 'All') {
+          result = result.filter(e => String(e.grade) === String(filters.grade));
+        }
         if (filters.search) {
           const query = filters.search.toLowerCase();
           result = result.filter(e => e.title.toLowerCase().includes(query) || e.description?.toLowerCase().includes(query));
@@ -89,11 +107,78 @@ export default function MockExamsPage({ currentUser, onSelectExam, navigateTo, e
     }
   };
 
+  const loadWrongQuestions = async () => {
+    setWrongLoading(true);
+    try {
+      const res = await api.getWrongQuestions();
+      setWrongQuestions(res || []);
+    } catch (err) {
+      console.error('Lỗi tải nhật ký câu sai:', err);
+    } finally {
+      setWrongLoading(false);
+    }
+  };
+
   useEffect(() => { loadSubjects(); }, []);
   useEffect(() => { loadExams(); }, [filters, examsList]);
+  
+  useEffect(() => {
+    if (activeTab === 'wrong') {
+      loadWrongQuestions();
+    }
+  }, [activeTab]);
 
   const handleStartExam = (examId) => {
     navigateTo(`/mock-exams/${examId}/start`);
+  };
+
+  const handleRetakeWrong = async (examId, attemptId) => {
+    try {
+      const retake = await mockExamService.createSmartRetake(examId, 'wrong_only', attemptId);
+      if (!retake || !retake.questions || retake.questions.length === 0) {
+        alert('Không có câu hỏi sai nào phù hợp để làm lại!');
+        return;
+      }
+      navigateTo(`/mock-exams/${examId}/start`, { retakeMode: 'wrong_only', retakeData: retake });
+    } catch (err) {
+      console.error(err);
+      alert('Không thể tạo phiên làm lại câu sai.');
+    }
+  };
+
+  const handlePracticeSimilar = async (wq) => {
+    setSimilarModalOpen(true);
+    setSimilarLoading(true);
+    setSimilarQuestion(null);
+    setSimilarSelectedOption(null);
+    setSimilarAnswerSubmitted(false);
+    try {
+      const res = await api.generateSimilarQuestion({
+        content: wq.content,
+        topic: wq.topic,
+        difficulty: wq.difficulty,
+        options: wq.options,
+        explanation: wq.explanation,
+        subject: wq.subject
+      });
+      setSimilarQuestion(res);
+    } catch (err) {
+      console.error(err);
+      alert('Không thể sinh câu hỏi tương tự từ AI.');
+      setSimilarModalOpen(false);
+    } finally {
+      setSimilarLoading(false);
+    }
+  };
+
+  const handleSelectSimilarOption = (opt) => {
+    if (similarAnswerSubmitted) return;
+    setSimilarSelectedOption(opt);
+  };
+
+  const handleSubmitSimilarAnswer = () => {
+    if (!similarSelectedOption) return;
+    setSimilarAnswerSubmitted(true);
   };
 
   const subjectCounts = {};
@@ -107,113 +192,333 @@ export default function MockExamsPage({ currentUser, onSelectExam, navigateTo, e
   });
 
   const hasActiveFilters =
-    filters.search || filters.subjectId !== 'All' || filters.year !== 'All' || filters.examType !== 'All';
+    filters.search || filters.subjectId !== 'All' || filters.year !== 'All' || filters.examType !== 'All' || filters.grade !== 'All';
 
   const activeSubjectName = subjects.find(s => String(s.id) === String(filters.subjectId))?.name;
 
   return (
     <div className="mock-exams-public-page animate-in">
-      {/* ── Public Navigation Header ── */}
-      {/* Public Navigation Header is now rendered globally by App.jsx to avoid duplication and maintain consistency */}
-
       <div className="mock-exams-content-wrapper">
 
-        {/* ══════════════════════════════════════
-            HERO BANNER — two-column layout
-        ══════════════════════════════════════ */}
         <h2 style={{ fontSize: '24px', fontWeight: '900', color: 'var(--text-primary)', marginBottom: '20px', textTransform: 'uppercase' }}>
           Đề Thi Thử THPT Quốc Gia
         </h2>
 
-        {/* Filter panel */}
-        <MockExamFilters
-          filters={filters}
-          onFilterChange={setFilters}
-          subjects={subjects}
-        />
+        {/* Navigation Tabs */}
+        <div style={{ display: 'flex', gap: '12px', borderBottom: '2px solid var(--border)', paddingBottom: '12px', marginBottom: '24px' }}>
+          <button
+            onClick={() => setActiveTab('list')}
+            style={{
+              padding: '8px 16px',
+              fontSize: '14.5px',
+              fontWeight: '800',
+              border: 'none',
+              background: 'none',
+              cursor: 'pointer',
+              color: activeTab === 'list' ? 'var(--exams-purple)' : 'var(--text-secondary)',
+              borderBottom: activeTab === 'list' ? '3px solid var(--exams-purple)' : 'none',
+              marginBottom: '-14px',
+              transition: 'all 0.2s',
+            }}
+          >
+            📋 Tất cả đề thi
+          </button>
+          {currentUser && (
+            <button
+              onClick={() => setActiveTab('wrong')}
+              style={{
+                padding: '8px 16px',
+                fontSize: '14.5px',
+                fontWeight: '800',
+                border: 'none',
+                background: 'none',
+                cursor: 'pointer',
+                color: activeTab === 'wrong' ? 'var(--exams-purple)' : 'var(--text-secondary)',
+                borderBottom: activeTab === 'wrong' ? '3px solid var(--exams-purple)' : 'none',
+                marginBottom: '-14px',
+                transition: 'all 0.2s',
+              }}
+            >
+              ⚠️ Nhật ký câu sai (AI)
+            </button>
+          )}
+        </div>
 
-        {/* ══════════════════════════════════════
-            RESULTS BAR v2
-        ══════════════════════════════════════ */}
-        {loading ? (
-          <div className="exam-cards-grid">
-            {[1, 2, 3, 4, 5, 6].map(idx => (
-              <div key={idx} className="exam-skeleton-card">
-                <div className="skeleton-header"></div>
-                <div className="skeleton-body">
-                  <div className="skeleton-line w80"></div>
-                  <div className="skeleton-line w60"></div>
-                  <div className="skeleton-line w40"></div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : exams.length > 0 ? (
+        {activeTab === 'list' ? (
           <>
-            <div className="exams-results-bar-v2">
-              <span className="results-count-v2">
-                Tìm thấy <strong>{exams.length}</strong> đề thi phù hợp
-              </span>
+            {/* Filter panel */}
+            <MockExamFilters
+              filters={filters}
+              onFilterChange={setFilters}
+              subjects={subjects}
+            />
 
-              {hasActiveFilters && (
-                <div className="results-active-filters">
-                  {filters.search && (
-                    <span className="active-filter-chip">
-                      Từ khoá: &quot;{filters.search}&quot;
-                      <button onClick={() => setFilters(f => ({ ...f, search: '' }))} title="Xoá">×</button>
-                    </span>
+            {/* RESULTS BAR v2 */}
+            {loading ? (
+              <div className="exam-cards-grid">
+                {[1, 2, 3, 4, 5, 6].map(idx => (
+                  <div key={idx} className="exam-skeleton-card">
+                    <div className="skeleton-header"></div>
+                    <div className="skeleton-body">
+                      <div className="skeleton-line w80"></div>
+                      <div className="skeleton-line w60"></div>
+                      <div className="skeleton-line w40"></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : exams.length > 0 ? (
+              <>
+                <div className="exams-results-bar-v2">
+                  <span className="results-count-v2">
+                    Tìm thấy <strong>{exams.length}</strong> đề thi phù hợp
+                  </span>
+
+                  {hasActiveFilters && (
+                    <div className="results-active-filters">
+                      {filters.search && (
+                        <span className="active-filter-chip">
+                          Từ khoá: &quot;{filters.search}&quot;
+                          <button onClick={() => setFilters(f => ({ ...f, search: '' }))} title="Xoá">×</button>
+                        </span>
+                      )}
+                      {filters.subjectId !== 'All' && (
+                        <span className="active-filter-chip">
+                          {activeSubjectName}
+                          <button onClick={() => setFilters(f => ({ ...f, subjectId: 'All' }))} title="Xoá">×</button>
+                        </span>
+                      )}
+                      {filters.year !== 'All' && (
+                        <span className="active-filter-chip">
+                          Năm {filters.year}
+                          <button onClick={() => setFilters(f => ({ ...f, year: 'All' }))} title="Xoá">×</button>
+                        </span>
+                      )}
+                      {filters.examType !== 'All' && (
+                        <span className="active-filter-chip">
+                          {filters.examType === 'official' ? 'Chính thức' : filters.examType === 'mock' ? 'Trường chuyên' : 'Nội bộ'}
+                          <button onClick={() => setFilters(f => ({ ...f, examType: 'All' }))} title="Xoá">×</button>
+                        </span>
+                      )}
+                      {filters.grade !== 'All' && (
+                        <span className="active-filter-chip">
+                          Lớp {filters.grade}
+                          <button onClick={() => setFilters(f => ({ ...f, grade: 'All' }))} title="Xoá">×</button>
+                        </span>
+                      )}
+                      <button
+                        onClick={() => setFilters({ search: '', subjectId: 'All', year: 'All', examType: 'All', grade: 'All' })}
+                        style={{ fontSize: '12px', color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold', textDecoration: 'underline' }}
+                      >
+                        Xoá tất cả
+                      </button>
+                    </div>
                   )}
-                  {filters.subjectId !== 'All' && (
-                    <span className="active-filter-chip">
-                      {activeSubjectName}
-                      <button onClick={() => setFilters(f => ({ ...f, subjectId: 'All' }))} title="Xoá">×</button>
-                    </span>
-                  )}
-                  {filters.year !== 'All' && (
-                    <span className="active-filter-chip">
-                      Năm {filters.year}
-                      <button onClick={() => setFilters(f => ({ ...f, year: 'All' }))} title="Xoá">×</button>
-                    </span>
-                  )}
-                  {filters.examType !== 'All' && (
-                    <span className="active-filter-chip">
-                      {filters.examType === 'official' ? 'Chính thức' : filters.examType === 'mock' ? 'Trường chuyên' : 'Nội bộ'}
-                      <button onClick={() => setFilters(f => ({ ...f, examType: 'All' }))} title="Xoá">×</button>
-                    </span>
-                  )}
-                  <button
-                    onClick={() => setFilters({ search: '', subjectId: 'All', year: 'All', examType: 'All' })}
-                    style={{ fontSize: '12px', color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold', textDecoration: 'underline' }}
-                  >
-                    Xoá tất cả
-                  </button>
                 </div>
-              )}
-            </div>
 
-            <div className="exam-cards-grid" style={{ marginBottom: '40px' }}>
-              {exams.map(exam => (
-                <MockExamCard
-                  key={exam.id}
-                  exam={exam}
-                  onSelect={onSelectExam}
-                  onStart={handleStartExam}
-                />
-              ))}
-            </div>
+                <div className="exam-cards-grid" style={{ marginBottom: '40px' }}>
+                  {exams.map(exam => (
+                    <MockExamCard
+                      key={exam.id}
+                      exam={exam}
+                      onSelect={onSelectExam}
+                      onStart={handleStartExam}
+                    />
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="exams-empty-state">
+                <HiOutlineFolderOpen style={{ fontSize: '48px', color: 'var(--text-muted)', display: 'block', margin: '0 auto 12px auto' }} />
+                <h3 className="empty-title">Không tìm thấy đề thi phù hợp</h3>
+                <p className="empty-desc">Vui lòng thay đổi từ khóa hoặc điều chỉnh bộ lọc tìm kiếm.</p>
+                <button
+                  className="btn-primary"
+                  onClick={() => setFilters({ search: '', subjectId: 'All', year: 'All', examType: 'All', grade: 'All' })}
+                  style={{ marginTop: '12px', background: 'var(--exams-purple)', border: 'none', cursor: 'pointer' }}
+                >
+                  Xóa bộ lọc
+                </button>
+              </div>
+            )}
           </>
         ) : (
-          <div className="exams-empty-state">
-            <HiOutlineFolderOpen style={{ fontSize: '48px', color: 'var(--text-muted)', display: 'block', margin: '0 auto 12px auto' }} />
-            <h3 className="empty-title">Không tìm thấy đề thi phù hợp</h3>
-            <p className="empty-desc">Vui lòng thay đổi từ khóa hoặc điều chỉnh bộ lọc tìm kiếm.</p>
-            <button
-              className="btn-primary"
-              onClick={() => setFilters({ search: '', subjectId: 'All', year: 'All', examType: 'All' })}
-              style={{ marginTop: '12px', background: 'var(--exams-purple)', border: 'none', cursor: 'pointer' }}
-            >
-              Xóa bộ lọc
-            </button>
+          /* Wrong Questions Log Tab */
+          <div style={{ marginTop: '12px' }}>
+            <div style={{ background: 'var(--bg-card)', border: '2px solid var(--border)', borderRadius: '16px', padding: '20px', marginBottom: '24px', boxShadow: 'var(--shadow-sm)' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: '900', color: 'var(--text-primary)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>🤖</span> Nhật Ký Câu Sai Thông Minh & AI Luyện Tập
+              </h3>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.5' }}>
+                Hệ thống tự động lưu trữ toàn bộ câu hỏi bạn đã làm sai trong các đề thi. Bạn có thể luyện tập lại các câu hỏi này hoặc yêu cầu AI tạo ra các câu hỏi tương tự để nắm vững kiến thức!
+              </p>
+            </div>
+
+            {wrongLoading ? (
+              <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-secondary)' }}>
+                <div style={{ fontSize: '24px', animation: 'spin 1s linear infinite', display: 'inline-block' }}>⏳</div>
+                <p style={{ marginTop: '12px', fontSize: '13px', fontWeight: 'bold' }}>Đang nạp nhật ký câu sai...</p>
+              </div>
+            ) : wrongQuestions.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginBottom: '40px' }}>
+                {wrongQuestions.map((wq, idx) => (
+                  <div key={wq.id || idx} style={{
+                    background: 'var(--bg-card)',
+                    border: '2px solid var(--border)',
+                    borderRadius: '12px',
+                    padding: '20px',
+                    boxShadow: 'var(--shadow-sm)',
+                    position: 'relative'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap', marginBottom: '12px', borderBottom: '1px solid var(--border)', paddingBottom: '10px' }}>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <span style={{ padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', background: 'var(--exams-purple)', color: '#fff' }}>
+                          {wq.subject || 'Môn học'}
+                        </span>
+                        {wq.topic && (
+                          <span style={{ padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', background: 'var(--bg-main)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+                            {wq.topic}
+                          </span>
+                        )}
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                          Độ khó: <strong>{wq.difficulty === 'HARD' ? 'Khó' : wq.difficulty === 'EASY' ? 'Dễ' : 'Trung bình'}</strong>
+                        </span>
+                      </div>
+                      <span style={{ fontSize: '12.5px', color: 'var(--text-secondary)' }}>
+                        Nguồn đề: <strong style={{ color: 'var(--text-primary)' }}>{wq.examTitle || 'Đề thi'}</strong>
+                      </span>
+                    </div>
+
+                    <div style={{ fontSize: '14.5px', fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: '16px', lineHeight: '1.6' }}>
+                      Câu hỏi: {wq.content}
+                    </div>
+
+                    {/* Render image or audio if exists */}
+                    {wq.imageUrl && (
+                      <div style={{ marginBottom: '16px' }}>
+                        <img src={wq.imageUrl} alt="Đính kèm câu hỏi" style={{ maxWidth: '100%', maxHeight: '250px', border: '1px solid var(--border)', borderRadius: '8px', objectFit: 'contain' }} />
+                      </div>
+                    )}
+                    {wq.audioUrl && (
+                      <div style={{ marginBottom: '16px' }}>
+                        <audio src={wq.audioUrl} controls style={{ width: '100%', maxWidth: '400px' }} />
+                      </div>
+                    )}
+
+                    {/* Options list */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '16px' }}>
+                      {wq.options && Object.entries(wq.options).map(([key, value]) => {
+                        const isCorrect = key === wq.correctAnswer;
+                        const isSelected = key === wq.selectedAnswer;
+                        let borderStyle = '1px solid var(--border)';
+                        let bgStyle = 'var(--bg-main)';
+                        let textColor = 'var(--text-secondary)';
+                        
+                        if (isCorrect) {
+                          borderStyle = '2px solid #2ecc71';
+                          bgStyle = 'rgba(46, 204, 113, 0.1)';
+                          textColor = '#27ae60';
+                        } else if (isSelected) {
+                          borderStyle = '2px solid #e74c3c';
+                          bgStyle = 'rgba(231, 76, 60, 0.1)';
+                          textColor = '#c0392b';
+                        }
+
+                        return (
+                          <div key={key} style={{
+                            padding: '10px 14px',
+                            borderRadius: '8px',
+                            border: borderStyle,
+                            background: bgStyle,
+                            color: textColor,
+                            fontSize: '13px',
+                            fontWeight: (isCorrect || isSelected) ? 'bold' : 'normal',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px'
+                          }}>
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              width: '24px',
+                              height: '24px',
+                              borderRadius: '50%',
+                              background: isCorrect ? '#2ecc71' : isSelected ? '#e74c3c' : 'var(--border)',
+                              color: (isCorrect || isSelected) ? '#fff' : 'var(--text-primary)',
+                              fontSize: '12px',
+                              fontWeight: 'bold'
+                            }}>{key}</span>
+                            <div style={{ flex: 1 }}>{value}</div>
+                            {isCorrect && <span style={{ fontSize: '11px', color: '#27ae60' }}>(Đáp án đúng)</span>}
+                            {isSelected && !isCorrect && <span style={{ fontSize: '11px', color: '#c0392b' }}>(Bạn chọn)</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Explanation */}
+                    {wq.explanation && (
+                      <div style={{ background: 'var(--bg-main)', borderLeft: '4px solid var(--exams-purple)', padding: '12px 16px', borderRadius: '6px', fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px', lineHeight: '1.5' }}>
+                        <strong>Lời giải:</strong> {wq.explanation}
+                      </div>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '16px' }}>
+                      <button
+                        onClick={() => handleRetakeWrong(wq.examId, wq.attemptId)}
+                        style={{
+                          padding: '8px 16px',
+                          background: 'var(--bg-card)',
+                          border: '2px solid var(--border)',
+                          borderRadius: '8px',
+                          fontWeight: 'bold',
+                          fontSize: '12.5px',
+                          color: 'var(--text-primary)',
+                          cursor: 'pointer',
+                          boxShadow: 'var(--shadow-sm)',
+                          transition: 'all 0.2s',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        🔄 Làm lại các câu sai của đề này
+                      </button>
+                      <button
+                        onClick={() => handlePracticeSimilar(wq)}
+                        style={{
+                          padding: '8px 16px',
+                          background: 'var(--exams-purple)',
+                          border: '2px solid var(--border)',
+                          borderRadius: '8px',
+                          fontWeight: 'bold',
+                          fontSize: '12.5px',
+                          color: '#fff',
+                          cursor: 'pointer',
+                          boxShadow: 'var(--shadow-sm)',
+                          transition: 'all 0.2s',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        🤖 Luyện câu tương tự AI
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '60px 20px', background: 'var(--bg-card)', border: '2px dashed var(--border)', borderRadius: '16px' }}>
+                <span style={{ fontSize: '48px', display: 'block', marginBottom: '16px' }}>🎉</span>
+                <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: '8px' }}>Nhật ký câu sai trống!</h3>
+                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', maxWidth: '400px', margin: '0 auto' }}>
+                  Tuyệt vời! Bạn không có bất kỳ câu hỏi làm sai nào. Hãy tích cực làm thêm nhiều đề thi khác để duy trì phong độ nhé.
+                </p>
+              </div>
+            )}
           </div>
         )}
 
@@ -228,6 +533,248 @@ export default function MockExamsPage({ currentUser, onSelectExam, navigateTo, e
           </div>
         )}
       </div>
+
+      {/* AI Similar Question Practice Modal */}
+      {similarModalOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.6)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '20px',
+          backdropFilter: 'blur(4px)'
+        }}>
+          <div style={{
+            background: 'var(--bg-card)',
+            border: '3px solid var(--border)',
+            borderRadius: '16px',
+            width: '100%',
+            maxWidth: '650px',
+            boxShadow: 'var(--shadow-lg)',
+            display: 'flex',
+            flexDirection: 'column',
+            maxHeight: '90vh',
+            animation: 'fadeIn 0.2s ease'
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              padding: '16px 20px',
+              borderBottom: '2px solid var(--border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: 'var(--bg-main)'
+            }}>
+              <h3 style={{ fontSize: '16px', fontWeight: '900', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>🤖</span> AI Luyện Tập Câu Hỏi Tương Tự
+              </h3>
+              <button
+                onClick={() => setSimilarModalOpen(false)}
+                style={{
+                  border: 'none',
+                  background: 'none',
+                  fontSize: '20px',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <HiX />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
+              {similarLoading ? (
+                <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+                  <div style={{ fontSize: '28px', animation: 'spin 1.5s linear infinite', display: 'inline-block' }}>⚡</div>
+                  <p style={{ marginTop: '12px', fontSize: '13.5px', color: 'var(--text-primary)', fontWeight: 'bold' }}>
+                    AI đang biên soạn câu hỏi tương tự cùng độ khó...
+                  </p>
+                  <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                    Lộ trình học tối ưu hóa theo timing và mục tiêu của bạn.
+                  </p>
+                </div>
+              ) : similarQuestion ? (
+                <div>
+                  <div style={{
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    fontSize: '11px',
+                    fontWeight: 'bold',
+                    background: 'var(--bg-main)',
+                    border: '1px solid var(--border)',
+                    color: 'var(--text-secondary)',
+                    display: 'inline-block',
+                    marginBottom: '12px'
+                  }}>
+                    Chủ đề: {similarQuestion.topic || 'Chung'} | Độ khó: {similarQuestion.difficulty || 'MEDIUM'}
+                  </div>
+
+                  <div style={{ fontSize: '14.5px', fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: '20px', lineHeight: '1.6' }}>
+                    {similarQuestion.content}
+                  </div>
+
+                  {/* Option Choices */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
+                    {similarQuestion.options && similarQuestion.options.map((opt) => {
+                      const isSelected = similarSelectedOption === opt.label;
+                      const isCorrectAnswer = opt.label === similarQuestion.correctAnswer;
+                      
+                      let borderStyle = '1px solid var(--border)';
+                      let bgStyle = 'var(--bg-card)';
+                      let textColor = 'var(--text-primary)';
+
+                      if (similarAnswerSubmitted) {
+                        if (isCorrectAnswer) {
+                          borderStyle = '2px solid #2ecc71';
+                          bgStyle = 'rgba(46, 204, 113, 0.1)';
+                          textColor = '#27ae60';
+                        } else if (isSelected) {
+                          borderStyle = '2px solid #e74c3c';
+                          bgStyle = 'rgba(231, 76, 60, 0.1)';
+                          textColor = '#c0392b';
+                        }
+                      } else if (isSelected) {
+                        borderStyle = '2px solid var(--exams-purple)';
+                        bgStyle = 'rgba(108, 92, 231, 0.05)';
+                      }
+
+                      return (
+                        <button
+                          key={opt.label}
+                          disabled={similarAnswerSubmitted}
+                          onClick={() => handleSelectSimilarOption(opt.label)}
+                          style={{
+                            width: '100%',
+                            textAlign: 'left',
+                            padding: '12px 16px',
+                            borderRadius: '8px',
+                            border: borderStyle,
+                            background: bgStyle,
+                            color: textColor,
+                            fontSize: '13px',
+                            fontWeight: isSelected ? 'bold' : 'normal',
+                            cursor: similarAnswerSubmitted ? 'default' : 'pointer',
+                            transition: 'all 0.2s',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            boxSizing: 'border-box'
+                          }}
+                        >
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '24px',
+                            height: '24px',
+                            borderRadius: '50%',
+                            background: isCorrectAnswer && similarAnswerSubmitted ? '#2ecc71' : (isSelected ? 'var(--exams-purple)' : 'var(--border)'),
+                            color: (isCorrectAnswer && similarAnswerSubmitted) || isSelected ? '#fff' : 'var(--text-primary)',
+                            fontSize: '12px',
+                            fontWeight: 'bold'
+                          }}>{opt.label}</span>
+                          <div style={{ flex: 1 }}>{opt.text}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Submission and Result message */}
+                  {!similarAnswerSubmitted ? (
+                    <button
+                      onClick={handleSubmitSimilarAnswer}
+                      disabled={!similarSelectedOption}
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        background: similarSelectedOption ? 'var(--exams-purple)' : 'var(--border)',
+                        color: similarSelectedOption ? '#fff' : 'var(--text-muted)',
+                        border: '2px solid var(--border)',
+                        borderRadius: '8px',
+                        fontWeight: 'bold',
+                        fontSize: '13.5px',
+                        cursor: similarSelectedOption ? 'pointer' : 'not-allowed',
+                        boxShadow: similarSelectedOption ? 'var(--shadow-sm)' : 'none',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      Kiểm tra đáp án
+                    </button>
+                  ) : (
+                    <div style={{
+                      padding: '16px',
+                      borderRadius: '8px',
+                      border: '2px solid var(--border)',
+                      background: 'var(--bg-main)',
+                      marginBottom: '10px'
+                    }}>
+                      <div style={{
+                        fontSize: '14px',
+                        fontWeight: 'bold',
+                        color: similarSelectedOption === similarQuestion.correctAnswer ? '#27ae60' : '#c0392b',
+                        marginBottom: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}>
+                        {similarSelectedOption === similarQuestion.correctAnswer ? (
+                          <><span>✅</span> Chính xác! Bạn đã hiểu bài rất tốt.</>
+                        ) : (
+                          <><span>❌</span> Chưa chính xác. Đừng lo lắng, hãy xem lời giải thích bên dưới.</>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
+                        <strong style={{ color: 'var(--text-primary)' }}>Giải thích chi tiết:</strong> {similarQuestion.explanation}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>Không thể sinh câu hỏi lúc này.</p>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              padding: '12px 20px',
+              borderTop: '2px solid var(--border)',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              background: 'var(--bg-main)',
+              borderBottomLeftRadius: '13px',
+              borderBottomRightRadius: '13px'
+            }}>
+              <button
+                onClick={() => setSimilarModalOpen(false)}
+                style={{
+                  padding: '8px 16px',
+                  background: 'var(--bg-card)',
+                  border: '2px solid var(--border)',
+                  borderRadius: '8px',
+                  fontWeight: 'bold',
+                  fontSize: '12.5px',
+                  color: 'var(--text-primary)',
+                  cursor: 'pointer',
+                  boxShadow: 'var(--shadow-sm)'
+                }}
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

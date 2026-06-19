@@ -13,7 +13,7 @@ export default function Header({
   onChangePassword,
   onNavigateSettings,
   addLog,
-  cartCourse,
+  cartCourses,
   onCheckoutCourse
 }) {
   const [showNotif, setShowNotif] = useState(false);
@@ -28,12 +28,14 @@ export default function Header({
   const getGreeting = () => {
     if (role === 'admin') return 'Chào Quản trị viên! 🛡️';
     if (role === 'teacher') return `Kính chào Thầy/Cô ${userProfile?.name}! 🎓`;
+    if (role === 'affiliate') return `Chào Đối tác ${userProfile?.name}! 🤝`;
     return `Chào lại, ${userProfile?.name}! 👋`;
   };
 
   const getSubtitle = () => {
     if (role === 'admin') return 'Hệ thống đang hoạt động ổn định.';
     if (role === 'teacher') return 'Hôm nay Thầy/Cô muốn chuẩn bị học liệu nào?';
+    if (role === 'affiliate') return 'Theo dõi chiến dịch tiếp thị và quản lý hoa hồng.';
     return 'Hôm nay bạn muốn chinh phục kiến thức nào?';
   };
 
@@ -86,8 +88,8 @@ export default function Header({
           <button
             className="header-icon-btn"
             onClick={() => {
-              if (cartCourse) {
-                onCheckoutCourse(cartCourse);
+              if (cartCourses && cartCourses.length > 0) {
+                onCheckoutCourse(cartCourses[0]);
               } else {
                 toast('Giỏ hàng trống! Hãy chọn một khóa học để thêm vào giỏ.', 'warning');
               }
@@ -96,9 +98,9 @@ export default function Header({
             style={{ position: 'relative' }}
           >
             <HiShoppingCart />
-            {cartCourse && (
+            {cartCourses && cartCourses.length > 0 && (
               <span className="badge" style={{ backgroundColor: '#ef4444' }}>
-                1
+                {cartCourses.length}
               </span>
             )}
           </button>

@@ -113,6 +113,7 @@ export function mapDbCourseToMockFormat(c) {
     priceSale: c.price * (1 - (c.discount || 0) / 100),
     discountPercent: c.discount || 0,
     level: levelVal,
+    grade: c.grade,
     curriculum: curriculumVal
   };
 }

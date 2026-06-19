@@ -1459,3 +1459,14 @@
   font-style: italic;
 }
 
+/* Landing Page fullscreen height overrides */
+.lp-root .flashcard-page-container {
+  height: 100vh !important;
+}
+@media (max-width: 1200px) {
+  .lp-root .flashcard-page-container {
+    height: auto !important;
+    overflow-y: auto !important;
+  }
+}
+

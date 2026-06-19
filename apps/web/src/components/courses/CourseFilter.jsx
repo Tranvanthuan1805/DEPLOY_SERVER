@@ -39,6 +39,13 @@ const BADGES = [
   { value: 'MỚI', label: 'Mới' },
 ];
 
+const GRADES = [
+  { value: 'All', label: 'Khối lớp (Tất cả)' },
+  { value: '10', label: 'Lớp 10' },
+  { value: '11', label: 'Lớp 11' },
+  { value: '12', label: 'Lớp 12' },
+];
+
 const SORT_OPTIONS = [
   { value: 'popular', label: 'Phổ biến nhất' },
   { value: 'rating', label: 'Đánh giá cao' },
@@ -113,10 +120,10 @@ function CustomDropdown({ options, value, onChange, colorClass }) {
                   fontSize: '13px',
                   fontWeight: isSelected ? '800' : '600',
                   color: isSelected 
-                    ? (colorClass === 'purple' ? '#4F46E5' : colorClass === 'green' ? '#059669' : colorClass === 'orange' ? '#D97706' : colorClass === 'blue' ? '#2563EB' : '#57534E')
+                    ? (colorClass === 'purple' ? '#4F46E5' : colorClass === 'green' ? '#059669' : colorClass === 'orange' ? '#D97706' : colorClass === 'blue' ? '#2563EB' : colorClass === 'stone' ? '#78716C' : '#57534E')
                     : '#292524',
                   background: isSelected 
-                    ? (colorClass === 'purple' ? '#F5F3FF' : colorClass === 'green' ? '#ECFDF5' : colorClass === 'orange' ? '#FEF3C7' : colorClass === 'blue' ? '#EFF6FF' : '#F5F5F4')
+                    ? (colorClass === 'purple' ? '#F5F3FF' : colorClass === 'green' ? '#ECFDF5' : colorClass === 'orange' ? '#FEF3C7' : colorClass === 'blue' ? '#EFF6FF' : colorClass === 'stone' ? '#F5F5F4' : '#F5F5F4')
                     : 'transparent',
                   cursor: 'pointer',
                   transition: 'background 0.15s, color 0.15s',
@@ -153,6 +160,8 @@ export default function CourseFilter({
   setBlock,
   level,
   setLevel,
+  grade,
+  setGrade,
   sortBy,
   setSortBy,
   badgeFilter,
@@ -246,7 +255,7 @@ export default function CourseFilter({
 
       <div style={{ height: '1.5px', background: 'var(--border-warm)', margin: '0 0' }} />
 
-      {/* Row 2: Four custom dropdown selectors styled in a grid */}
+      {/* Row 2: Five custom dropdown selectors styled in a grid */}
       <div className="cf-dropdown-grid">
         <CustomDropdown
           options={BLOCKS}
@@ -267,6 +276,13 @@ export default function CourseFilter({
           value={level}
           onChange={setLevel}
           colorClass="orange"
+        />
+
+        <CustomDropdown
+          options={GRADES}
+          value={grade}
+          onChange={setGrade}
+          colorClass="stone"
         />
 
         <CustomDropdown

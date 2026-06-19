@@ -207,6 +207,42 @@ export default function MockExamFilters({ filters, onFilterChange, subjects }) {
           })}
         </div>
       </div>
+
+      {/* Grade selection tags */}
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--text-primary)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+          <span>🎓</span> Khối lớp:
+        </span>
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+          {[
+            { value: 'All', label: 'Tất cả lớp' },
+            { value: '10', label: 'Lớp 10' },
+            { value: '11', label: 'Lớp 11' },
+            { value: '12', label: 'Lớp 12' }
+          ].map(g => {
+            const isActive = (filters.grade || 'All') === g.value;
+            return (
+              <button
+                key={g.value}
+                onClick={() => onFilterChange({ ...filters, grade: g.value })}
+                style={{
+                  padding: '5px 12px',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  borderRadius: '20px',
+                  border: isActive ? '1px solid var(--exams-purple)' : '1px solid var(--border)',
+                  background: isActive ? 'var(--exams-purple)' : 'var(--bg-main)',
+                  color: isActive ? '#fff' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                {g.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

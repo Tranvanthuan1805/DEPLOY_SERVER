@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { getSubjectGroupForSubject, getSubjectsForSubjectGroup } from '../utils/subjectClassifier.js';
 
 export async function getCourses(req: AuthRequest, res: Response) {
-  const { subject, subjectGroup, price } = req.query;
+  const { subject, subjectGroup, price, grade } = req.query;
 
   try {
     const filters: any = { isApproved: true };
@@ -16,6 +16,10 @@ export async function getCourses(req: AuthRequest, res: Response) {
     }
     if (price === 'free') filters.price = 0;
     else if (price === 'paid') filters.price = { gt: 0 };
+
+    if (grade && grade !== 'All') {
+      filters.grade = Number(grade);
+    }
 
     const list = await prisma.course.findMany({
       where: filters,
@@ -57,7 +61,10 @@ export async function getCourseById(req: AuthRequest, res: Response) {
     const courseObj = await prisma.course.findUnique({
       where: { id: Number(id) },
       include: {
-        lessons: { orderBy: { order: 'asc' } },
+        lessons: { 
+          orderBy: { order: 'asc' },
+          include: { documents: true }
+        },
         teacher: { include: { user: { select: { fullName: true, avatarUrl: true } } } },
         reviews: { include: { student: { include: { user: { select: { fullName: true } } } } } },
         enrollments: true
@@ -80,7 +87,7 @@ export async function getCourseById(req: AuthRequest, res: Response) {
 }
 
 export async function createCourse(req: AuthRequest, res: Response) {
-  const { title, description, subject, price, discount, thumbnailUrl } = req.body;
+  const { title, description, subject, price, discount, thumbnailUrl, grade } = req.body;
   const teacherId = req.user?.id;
 
   if (!teacherId) return res.status(401).json({ success: false, error: 'Chưa xác thực!' });
@@ -94,6 +101,7 @@ export async function createCourse(req: AuthRequest, res: Response) {
         price: Number(price),
         discount: discount !== undefined ? Number(discount) : 0,
         thumbnailUrl,
+        grade: grade ? Number(grade) : null,
         isPublished: false,
         isApproved: false, // Pending Admin review approval!
         teacherId
@@ -130,3 +138,78 @@ export async function getCourseStats(req: AuthRequest, res: Response) {
     return res.status(500).json({ success: false, error: err.message });
   }
 }
+
+export async function updateCourse(req: AuthRequest, res: Response) {
+  const courseId = Number(req.params.id);
+  const { title, description, subject, price, discount, thumbnailUrl, grade } = req.body;
+
+  try {
+    const updated = await prisma.course.update({
+      where: { id: courseId },
+      data: {
+        ...(title ? { title } : {}),
+        ...(description ? { description } : {}),
+        ...(subject ? { subject } : {}),
+        ...(price !== undefined ? { price: Number(price) } : {}),
+        ...(discount !== undefined ? { discount: Number(discount) } : {}),
+        ...(thumbnailUrl !== undefined ? { thumbnailUrl } : {}),
+        ...(grade !== undefined ? { grade: grade ? Number(grade) : null } : {})
+      }
+    });
+
+    return res.status(200).json({ success: true, data: updated });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+export async function deleteCourse(req: AuthRequest, res: Response) {
+  const courseId = Number(req.params.id);
+
+  try {
+    await prisma.course.delete({
+      where: { id: courseId }
+    });
+
+    return res.status(200).json({ success: true, data: 'Đã xóa khóa học thành công!' });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+export async function updateLesson(req: AuthRequest, res: Response) {
+  const lessonId = Number(req.params.id);
+  const { title, order, videoUrl, content, duration } = req.body;
+
+  try {
+    const updated = await prisma.lesson.update({
+      where: { id: lessonId },
+      data: {
+        ...(title ? { title } : {}),
+        ...(order !== undefined ? { order: Number(order) } : {}),
+        ...(videoUrl !== undefined ? { videoUrl } : {}),
+        ...(content !== undefined ? { content } : {}),
+        ...(duration !== undefined ? { duration } : {})
+      }
+    });
+
+    return res.status(200).json({ success: true, data: updated });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+export async function deleteLesson(req: AuthRequest, res: Response) {
+  const lessonId = Number(req.params.id);
+
+  try {
+    await prisma.lesson.delete({
+      where: { id: lessonId }
+    });
+
+    return res.status(200).json({ success: true, data: 'Đã xóa bài học thành công!' });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+}
+

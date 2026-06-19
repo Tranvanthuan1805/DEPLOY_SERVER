@@ -390,7 +390,7 @@
 }
 .sidebar-upgrade--v2 { 
   margin: 12px; 
-  padding: 14px; 
+  padding: 8px 12px; 
   background: #a29bfe; 
   border: 3px solid #000000;
   border-radius: 12px; 
@@ -398,23 +398,54 @@
   flex-shrink: 0; 
   display: flex; 
   flex-direction: column; 
-  gap: 8px; 
+  gap: 0px; 
   box-shadow: 3px 3px 0px #000000; 
+  max-height: 44px;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+.sidebar-upgrade--v2:hover { 
+  padding: 14px; 
+  max-height: 180px; 
+  gap: 12px;
+}
+.sidebar-upgrade__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .sidebar-upgrade__icon { 
   font-size: 20px; 
+  display: flex;
+  align-items: center;
 }
-.sidebar-upgrade__body strong { 
-  display: block; 
+.sidebar-upgrade__title {
   font-size: 13.5px; 
   font-weight: 900; 
 }
-.sidebar-upgrade__body p { 
+.sidebar-upgrade__collapsible {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sidebar-upgrade--v2:hover .sidebar-upgrade__collapsible {
+  max-height: 120px;
+  opacity: 1;
+  pointer-events: auto;
+  margin-top: 8px;
+}
+.sidebar-upgrade__desc { 
   font-size: 11px; 
   opacity: 0.9; 
   line-height: 1.4; 
-  margin-top: 2px; 
   font-weight: 700;
+  margin: 0;
 }
 .sidebar-upgrade__btn { 
   width: 100%; 

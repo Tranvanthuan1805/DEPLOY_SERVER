@@ -2,7 +2,7 @@ import {
   HiHome, HiAcademicCap, HiBookOpen, HiClipboardCheck,
   HiLightBulb, HiChartBar, HiCollection,
   HiChat, HiCog, HiStar, HiArrowUp, HiDatabase, HiTerminal, HiUsers, HiTrendingUp,
-  HiMap, HiShieldCheck, HiBadgeCheck
+  HiMap, HiShieldCheck, HiBadgeCheck, HiSparkles
 } from 'react-icons/hi';
 
 const navGroups = {
@@ -27,6 +27,7 @@ const navGroups = {
       items: [
         { label: 'Flashcard thông minh', id: 'path', icon: HiCollection },
         { label: 'Sơ đồ tư duy AI', id: 'ai-qa', icon: HiMap },
+        { label: 'Claude Code Sessions', id: 'ai-chat', icon: HiSparkles },
       ],
     },
     {
@@ -77,6 +78,30 @@ const navGroups = {
       groupLabel: '⚙️ Tài khoản',
       items: [
         { icon: HiCog, label: 'Cài đặt hồ sơ', id: 'settings' },
+      ],
+    },
+  ],
+  affiliate: [
+    {
+      groupLabel: '📊 Đối tác',
+      items: [
+        { label: 'Bảng điều khiển', id: 'home', icon: HiHome },
+        { label: 'Người giới thiệu', id: 'referrals', icon: HiUsers },
+        { label: 'Thu nhập & Hoa hồng', id: 'commissions', icon: HiDatabase },
+        { label: 'Yêu cầu rút tiền', id: 'payouts', icon: HiClipboardCheck },
+      ],
+    },
+    {
+      groupLabel: '📣 Tiếp thị & Xếp hạng',
+      items: [
+        { label: 'Tài liệu quảng bá', id: 'materials', icon: HiCollection },
+        { label: 'Bảng xếp hạng đối tác', id: 'leaderboard', icon: HiChartBar },
+      ],
+    },
+    {
+      groupLabel: '⚙️ Tài khoản',
+      items: [
+        { label: 'Cài đặt thanh toán', id: 'settings', icon: HiCog },
       ],
     },
   ],
@@ -152,18 +177,20 @@ export default function Sidebar({ role, active, setActive, userProfile, onLogout
       {/* PRO upgrade banner (student only, non-PRO) */}
       {role === 'student' && !isPro && (
         <div className="sidebar-upgrade sidebar-upgrade--v2">
-          <div className="sidebar-upgrade__icon">⭐</div>
-          <div className="sidebar-upgrade__body">
-            <strong>Nâng cấp PRO</strong>
-            <p>Mở toàn bộ AI nâng cao & lộ trình cá nhân hóa</p>
+          <div className="sidebar-upgrade__header">
+            <span className="sidebar-upgrade__icon">⭐</span>
+            <strong className="sidebar-upgrade__title">Nâng cấp PRO</strong>
           </div>
-          <button
-            className="sidebar-upgrade__btn"
-            onClick={onUpgradePRO}
-            id="sidebar-upgrade-pro-btn"
-          >
-            Nâng cấp
-          </button>
+          <div className="sidebar-upgrade__collapsible">
+            <p className="sidebar-upgrade__desc">Mở toàn bộ AI nâng cao & lộ trình cá nhân hóa</p>
+            <button
+              className="sidebar-upgrade__btn"
+              onClick={onUpgradePRO}
+              id="sidebar-upgrade-pro-btn"
+            >
+              Nâng cấp
+            </button>
+          </div>
         </div>
       )}
 
@@ -182,7 +209,7 @@ export default function Sidebar({ role, active, setActive, userProfile, onLogout
               style={{
                 background: isPro
                   ? 'linear-gradient(135deg, #FFE259, #FFA751)'
-                  : role === 'admin' ? '#E74C3C' : role === 'teacher' ? '#0984E3' : 'linear-gradient(135deg, #7C3AED, #4F46E5)',
+                  : role === 'admin' ? '#E74C3C' : role === 'teacher' ? '#0984E3' : role === 'affiliate' ? '#2ECC71' : 'linear-gradient(135deg, #7C3AED, #4F46E5)',
               }}
             >
               {userProfile?.avatar && userProfile.avatar.length <= 10
@@ -203,7 +230,7 @@ export default function Sidebar({ role, active, setActive, userProfile, onLogout
           <p className="sidebar-user__role">
             {role === 'student'
               ? (isPro ? '⭐ HỌC VIÊN PRO' : `Lớp ${userProfile?.grade || 12} · ${userProfile?.combo || 'A01'}`)
-              : role.toUpperCase()}
+              : role === 'affiliate' ? 'ĐỐI TÁC AFFILIATE' : role.toUpperCase()}
           </p>
         </div>
 

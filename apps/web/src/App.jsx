@@ -19,6 +19,7 @@ import CourseDetails from './components/CourseDetails';
 import TestSimulator from './components/TestSimulator';
 import TeacherDashboard from './components/TeacherDashboard';
 import AdminDashboard from './components/AdminDashboard';
+import AffiliateDashboard from './components/AffiliateDashboard';
 import AISystemCenter from './components/AISystemCenter';
 import Forum from './components/Forum';
 import CourseMall from './components/CourseMall';
@@ -46,6 +47,8 @@ import './styles/flashcards.css';
 import ExamBankPage from './pages/ExamBankPage';
 import './styles/exambank.css';
 import ConfirmEmailPage from './pages/ConfirmEmailPage';
+import RouteGuard from './components/common/RouteGuard';
+import DevToolsPage from './pages/DevToolsPage';
 
 
 import { HiPlay, HiDocumentDownload, HiBeaker, HiX, HiBookOpen } from 'react-icons/hi';
@@ -987,9 +990,15 @@ function LeaderboardTab({ currentUser }) {
 export default function App() {
   // Global Application States
   const [currentUser, setCurrentUser] = useState(() => JSON.parse(localStorage.getItem('current_user')) || null);
-  const [role, setRole] = useState(() => localStorage.getItem('user_role') || 'guest');
+  const [role, setRole] = useState(() => {
+    const saved = JSON.parse(localStorage.getItem('current_user') || 'null');
+    return saved?.role?.toLowerCase() || 'guest';
+  });
+  const [previewRole, setPreviewRole] = useState(null);
+  const effectiveRole = previewRole || role;
   const [theme, setTheme] = useState(() => localStorage.getItem('app_theme') || 'light');
   const [activeTab, setActiveTab] = useState('home');
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Custom SPA Router State
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
@@ -1015,66 +1024,155 @@ export default function App() {
     };
   }, []);
 
+  // Sync role with currentUser state changes
+  useEffect(() => {
+    if (currentUser) {
+      setRole(currentUser.role.toLowerCase());
+    } else {
+      setRole('guest');
+    }
+  }, [currentUser]);
+
+  // Verify JWT and sync profile with backend on page load
+  useEffect(() => {
+    const verifyUser = async () => {
+      const token = localStorage.getItem('access_token');
+      if (token) {
+        try {
+          const profile = await api.getMe();
+          if (profile) {
+            const mappedUser = {
+              ...profile,
+              name: profile.fullName,
+              avatar: profile.avatarUrl || 'MA',
+              role: profile.role.toLowerCase(),
+              combo: profile.subjectGroup || 'A01 (Toán – Lý – Anh)',
+              grade: '12',
+              unlockedCourses: profile.enrollments?.map(e => e.courseId) || []
+            };
+            setCurrentUser(mappedUser);
+            localStorage.setItem('current_user', JSON.stringify(mappedUser));
+          }
+        } catch (err) {
+          console.error('[Verify User Error] Session expired or invalid token:', err);
+          handleLogout();
+        }
+      }
+    };
+    verifyUser();
+  }, []);
+
   const navigateTo = (path, state = null) => {
     window.history.pushState(state || {}, '', path);
     setCurrentPath(path);
   };
 
   const getParsedRoute = () => {
-    if (currentPath === '/admin' || currentPath.startsWith('/admin/')) {
-      return { route: 'admin' };
+    if (currentPath === '/admin' || currentPath === '/admin/') {
+      return { route: 'admin', tab: 'home' };
     }
-    if (currentPath === '/courses') {
-      return { route: 'courses-list' };
+    if (currentPath.startsWith('/admin/')) {
+      const tab = currentPath.substring(7).replace(/\/$/, '');
+      return { route: 'admin', tab: tab };
     }
-    const courseMatch = currentPath.match(/^\/courses\/(\d+)$/);
-    if (courseMatch) {
-      return { route: 'course-detail', courseId: courseMatch[1] };
+
+    if (currentPath === '/teacher' || currentPath === '/teacher/') {
+      return { route: 'teacher', tab: 'home' };
     }
+    if (currentPath.startsWith('/teacher/')) {
+      const tab = currentPath.substring(9).replace(/\/$/, '');
+      return { route: 'teacher', tab: tab };
+    }
+
+    if (currentPath === '/devtools') {
+      return { route: 'devtools' };
+    }
+
+    if (currentPath === '/dashboard' || currentPath === '/dashboard/') {
+      return { route: 'dashboard', tab: 'home' };
+    }
+    if (currentPath.startsWith('/dashboard/')) {
+      const sub = currentPath.substring(11).replace(/\/$/, '');
+      let tab = sub;
+      if (sub === 'mock-exams') tab = 'tests';
+      if (sub === 'ai-tutor') tab = 'ai-qa';
+      if (sub === 'flashcards') tab = 'path';
+      if (sub === 'exam-bank') tab = 'library';
+      return { route: 'dashboard', tab: tab };
+    }
+
     const learnMatch = currentPath.match(/^\/learn\/(\d+)(?:\/lesson\/(\d+))?$/);
     if (learnMatch) {
       return { route: 'learn', courseId: learnMatch[1], lessonId: learnMatch[2] || null };
-    }
-    if (currentPath === '/mock-exams') {
-      return { route: 'mock-exams-list' };
-    }
-    const mockExamMatch = currentPath.match(/^\/mock-exams\/([^/]+)$/);
-    if (mockExamMatch && !currentPath.includes('/start') && !currentPath.includes('/result/')) {
-      return { route: 'mock-exam-detail', examId: mockExamMatch[1] };
-    }
-    const mockExamTakingMatch = currentPath.match(/^\/mock-exams\/([^/]+)\/start$/);
-    if (mockExamTakingMatch) {
-      return { route: 'mock-exam-taking', examId: mockExamTakingMatch[1] };
-    }
-    const mockExamResultMatch = currentPath.match(/^\/mock-exams\/([^/]+)\/result\/([^/]+)$/);
-    if (mockExamResultMatch) {
-      return { route: 'mock-exam-result', examId: mockExamResultMatch[1], attemptId: mockExamResultMatch[2] };
-    }
-
-    if (currentPath.startsWith('/ai-tutor')) {
-      return { route: 'ai-tutor' };
-    }
-
-    if (currentPath.startsWith('/flashcards')) {
-      return { route: 'flashcards' };
-    }
-
-    if (currentPath === '/exam-bank') {
-      return { route: 'exam-bank' };
-    }
-
-    if (currentPath === '/forum' || currentPath === '/community' || currentPath === '/direct') {
-      return { route: 'forum' };
     }
 
     if (currentPath.startsWith('/confirm-email')) {
       return { route: 'confirm-email' };
     }
 
-    return { route: 'legacy' };
+    if (currentPath === '/courses') {
+      return { route: 'public-courses' };
+    }
+    const courseMatch = currentPath.match(/^\/courses\/(\d+)$/);
+    if (courseMatch) {
+      return { route: 'public-course-detail', courseId: courseMatch[1] };
+    }
+    if (currentPath === '/mock-exams') {
+      return { route: 'public-mock-exams' };
+    }
+    const mockExamMatch = currentPath.match(/^\/mock-exams\/([^/]+)$/);
+    if (mockExamMatch && !currentPath.includes('/start') && !currentPath.includes('/result/')) {
+      return { route: 'public-mock-exam-detail', examId: mockExamMatch[1] };
+    }
+    const mockExamTakingMatch = currentPath.match(/^\/mock-exams\/([^/]+)\/start$/);
+    if (mockExamTakingMatch) {
+      return { route: 'public-mock-exam-taking', examId: mockExamTakingMatch[1] };
+    }
+    const mockExamResultMatch = currentPath.match(/^\/mock-exams\/([^/]+)\/result\/([^/]+)$/);
+    if (mockExamResultMatch) {
+      return { route: 'public-mock-exam-result', examId: mockExamResultMatch[1], attemptId: mockExamResultMatch[2] };
+    }
+
+    if (currentPath.startsWith('/ai-tutor') || currentPath.startsWith('/ai tutor') || currentPath.startsWith('/ai%20tutor')) {
+      return { route: 'public-ai-tutor' };
+    }
+
+    if (currentPath.startsWith('/flashcards')) {
+      return { route: 'public-flashcards' };
+    }
+
+    if (currentPath === '/exam-bank' || currentPath === '/exam bank' || currentPath === '/exam%20bank') {
+      return { route: 'public-exam-bank' };
+    }
+
+    if (currentPath === '/forum' || currentPath === '/community' || currentPath === '/direct') {
+      return { route: 'public-forum' };
+    }
+
+    return { route: 'landing' };
   };
 
   const parsedRoute = getParsedRoute();
+
+  // Auto-collapse sidebar on key study pages to enter fullscreen
+  useEffect(() => {
+    if (parsedRoute.route === 'dashboard' && ['path', 'ai-qa', 'library'].includes(parsedRoute.tab)) {
+      setIsFullscreen(true);
+    } else {
+      setIsFullscreen(false);
+    }
+  }, [parsedRoute.tab, parsedRoute.route]);
+
+  // Auto-preview guard for admin/teacher visiting dashboard paths
+  useEffect(() => {
+    const parsed = getParsedRoute();
+    if (parsed.route === 'dashboard') {
+      if (role === 'admin' && !previewRole) {
+        setPreviewRole('student');
+        addLog('[Preview Mode] Tự động chuyển Quản trị viên sang xem trước Học sinh', 'sys');
+      }
+    }
+  }, [currentPath, role, previewRole]);
 
   // Relational Tables databases in localStorage
   const [usersList, setUsersList] = useState(() => {
@@ -1246,6 +1344,7 @@ export default function App() {
   const [activeCourseDetails, setActiveCourseDetails] = useState(null);
   const [activeTestSimulator, setActiveTestSimulator] = useState(null);
   const [activeOCRScanner, setActiveOCRScanner] = useState(null);
+  const isEffectiveFullscreen = isFullscreen || (role === 'student' && parsedRoute.route === 'dashboard' && !!activeTestSimulator);
   const [examFilterSubject, setExamFilterSubject] = useState('All');
   const [examFilterYear, setExamFilterYear] = useState('All');
   const [examSearchQuery, setExamSearchQuery] = useState('');
@@ -1261,13 +1360,30 @@ export default function App() {
   }, [examFilterSubject, examFilterYear, examSearchQuery, examCategory]);
 
   const [checkoutCourse, setCheckoutCourse] = useState(null);
-  const [cartCourse, setCartCourse] = useState(() => JSON.parse(localStorage.getItem('app_cart_course')) || null);
+  const [cartCourses, setCartCourses] = useState(() => JSON.parse(localStorage.getItem('app_cart_courses')) || []);
   const [showUpgradePRO, setShowUpgradePRO] = useState(false);
 
   const handleAddToCart = (course) => {
-    setCartCourse(course);
-    localStorage.setItem('app_cart_course', JSON.stringify(course));
+    const exists = cartCourses.some(c => c.id === course.id);
+    if (exists) {
+      showToast.current?.(`Khóa học "${course.title}" đã có trong giỏ hàng rồi!`, 'warning');
+      return;
+    }
+    const updated = [...cartCourses, course];
+    setCartCourses(updated);
+    localStorage.setItem('app_cart_courses', JSON.stringify(updated));
     showToast.current?.(`Đã thêm khóa học "${course.title}" vào giỏ hàng!`, 'success');
+  };
+
+  const handleCheckoutCourse = (course) => {
+    const exists = cartCourses.some(c => c.id === course.id);
+    let updated = cartCourses;
+    if (!exists) {
+      updated = [...cartCourses, course];
+      setCartCourses(updated);
+      localStorage.setItem('app_cart_courses', JSON.stringify(updated));
+    }
+    setCheckoutCourse(course);
   };
 
   // Settings-specific local states
@@ -1323,10 +1439,17 @@ export default function App() {
 
   // Redirect guest users away from mock exams
   useEffect(() => {
-    if ((role === 'guest' || !currentUser) && parsedRoute.route.startsWith('mock-')) {
+    if ((role === 'guest' || !currentUser) && (parsedRoute.route.startsWith('mock-') || parsedRoute.route.startsWith('public-mock-'))) {
       showToast.current?.('Vui lòng đăng nhập để sử dụng chức năng thi thử!', 'warning');
       navigateTo('/');
       setActiveTab('login');
+    }
+  }, [currentUser, role, parsedRoute.route]);
+
+  // Guard dashboard routes and redirect to home if not logged in
+  useEffect(() => {
+    if ((role === 'guest' || !currentUser) && parsedRoute.route === 'dashboard') {
+      navigateTo('/');
     }
   }, [currentUser, role, parsedRoute.route]);
 
@@ -1371,7 +1494,6 @@ export default function App() {
   // Sync state data to localStorage
   useEffect(() => {
     localStorage.setItem('current_user', JSON.stringify(currentUser));
-    localStorage.setItem('user_role', role);
     localStorage.setItem('app_theme', theme);
     localStorage.setItem('users_list', JSON.stringify(usersList));
     localStorage.setItem('app_courses', JSON.stringify(courses));
@@ -1557,12 +1679,13 @@ export default function App() {
 
   const handleBackToDashboard = (targetTab) => {
     if (targetTab === 'courses') {
-      navigateTo('/courses');
+      navigateTo('/dashboard/courses');
     } else if (targetTab === 'forum') {
-      navigateTo('/forum');
+      navigateTo('/dashboard/forum');
+    } else if (targetTab === 'settings') {
+      navigateTo('/dashboard/settings');
     } else {
-      navigateTo('/');
-      setActiveTab(targetTab || 'home');
+      navigateTo('/dashboard');
       setActiveCourseDetails(null);
       setActiveTestSimulator(null);
       setActiveOCRScanner(null);
@@ -1574,7 +1697,6 @@ export default function App() {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('current_user');
-    localStorage.removeItem('user_role');
     navigateTo('/');
     setCurrentUser(null);
     setRole('guest');
@@ -1644,18 +1766,24 @@ export default function App() {
     }
   };
 
-  // Student purchases course
-  const handlePaymentSuccess = async (courseId) => {
+  // Student purchases course(s)
+  const handlePaymentSuccess = async (courseIdOrIds) => {
+    const ids = Array.isArray(courseIdOrIds) 
+      ? courseIdOrIds.map(id => id.toString()) 
+      : [courseIdOrIds.toString()];
+
     // Write payment & enrollment rows into local storage db / Supabase tables
     if (currentUser) {
-      try {
-        const targetCourse = courses.find(c => c.id.toString() === courseId.toString());
-        const priceNum = targetCourse 
-          ? parseFloat(String(targetCourse.priceSale || targetCourse.price || targetCourse.priceOriginal).replace(/\D/g, '')) 
-          : 499000;
-        await enrollmentService.enrollCourse(currentUser.id, courseId, priceNum);
-      } catch (err) {
-        console.error('Failed to log payment enrollment data:', err);
+      for (const id of ids) {
+        try {
+          const targetCourse = courses.find(c => c.id.toString() === id);
+          const priceNum = targetCourse 
+            ? parseFloat(String(targetCourse.priceSale || targetCourse.price || targetCourse.priceOriginal).replace(/\D/g, '')) 
+            : 499000;
+          await enrollmentService.enrollCourse(currentUser.id, id, priceNum);
+        } catch (err) {
+          console.error('Failed to log payment enrollment data:', err);
+        }
       }
     }
 
@@ -1663,7 +1791,12 @@ export default function App() {
     const updatedUsers = usersList.map(u => {
       if (u.email === currentUser.email) {
         const unlocked = u.unlockedCourses || [];
-        const newUnlocked = Array.from(new Set([...unlocked, courseId, Number(courseId), courseId.toString()]));
+        const newUnlocked = Array.from(new Set([
+          ...unlocked, 
+          ...ids, 
+          ...ids.map(Number), 
+          ...ids.map(id => id.toString())
+        ]));
         return { ...u, unlockedCourses: newUnlocked };
       }
       return u;
@@ -1672,15 +1805,23 @@ export default function App() {
 
     // Sync active session unlockedCourses
     const activeUnlocked = currentUser?.unlockedCourses || [];
-    const newActiveUnlocked = Array.from(new Set([...activeUnlocked, courseId, Number(courseId), courseId.toString()]));
-    setCurrentUser({
+    const newActiveUnlocked = Array.from(new Set([
+      ...activeUnlocked, 
+      ...ids, 
+      ...ids.map(Number), 
+      ...ids.map(id => id.toString())
+    ]));
+    
+    const updatedCurrentUser = {
       ...currentUser,
       unlockedCourses: newActiveUnlocked
-    });
+    };
+    setCurrentUser(updatedCurrentUser);
+    localStorage.setItem('current_user', JSON.stringify(updatedCurrentUser));
 
     setCheckoutCourse(null);
-    setCartCourse(null);
-    localStorage.removeItem('app_cart_course');
+    setCartCourses([]);
+    localStorage.removeItem('app_cart_courses');
   };
 
   // Student upgrades to PRO membership success
@@ -1719,7 +1860,7 @@ export default function App() {
 
     setSubmissions(prev => [newSubmission, ...prev]);
     setActiveTestSimulator(null);
-    setActiveTab('path'); // Take them to Adaptive Roadmap to see the AI updates!
+    navigateTo('/dashboard/flashcards');
   };
 
   // Forum interactions
@@ -1852,40 +1993,136 @@ export default function App() {
   return (
     <div className="app-layout">
       {/* Sidebar - Guarded against guest visitors and focused exam sessions */}
-      {role !== 'guest' && role !== 'admin' && activeTab !== 'landing' && parsedRoute.route !== 'mock-exam-taking' && !parsedRoute.route.startsWith('mock-') && parsedRoute.route !== 'learn' && parsedRoute.route !== 'admin' && (
-        <Sidebar
-          role={role}
-          featureFlags={featureFlags}
-          active={parsedRoute.route !== 'legacy' ? (parsedRoute.route.startsWith('mock-') ? 'tests' : (parsedRoute.route === 'ai-tutor' ? 'ai-qa' : (parsedRoute.route === 'flashcards' ? 'path' : (parsedRoute.route === 'exam-bank' ? 'library' : (parsedRoute.route === 'forum' ? 'forum' : 'courses'))))) : activeTab}
-          setActive={(tab) => {
-            if (tab === 'courses') {
-              navigateTo('/courses');
-            } else if (tab === 'tests') {
-              navigateTo('/mock-exams');
-            } else if (tab === 'ai-qa') {
-              navigateTo('/ai-tutor');
-            } else if (tab === 'path') {
-              navigateTo('/flashcards');
-            } else if (tab === 'library') {
-              navigateTo('/exam-bank');
-            } else if (tab === 'forum') {
-              navigateTo('/forum');
-            } else {
-              navigateTo('/');
-              setActiveTab(tab);
-              setActiveCourseDetails(null);
-              setActiveTestSimulator(null);
-              setActiveOCRScanner(null);
-            }
-          }}
-          userProfile={currentUser}
-          onLogout={handleLogout}
-          onUpgradePRO={() => setShowUpgradePRO(true)}
-        />
+      {effectiveRole !== 'guest' && effectiveRole !== 'admin' && parsedRoute.route === 'dashboard' && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          bottom: 0,
+          width: 'var(--sidebar-width)',
+          transform: isEffectiveFullscreen ? 'translateX(-100%)' : 'none',
+          transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          zIndex: 1000,
+        }}>
+          <Sidebar
+            role={effectiveRole}
+            featureFlags={featureFlags}
+            active={parsedRoute.tab}
+            setActive={(tab) => {
+              if (tab === 'courses') {
+                navigateTo('/dashboard/courses');
+              } else if (tab === 'tests') {
+                navigateTo('/dashboard/mock-exams');
+              } else if (tab === 'ai-qa') {
+                navigateTo('/dashboard/ai-tutor');
+              } else if (tab === 'path') {
+                navigateTo('/dashboard/flashcards');
+              } else if (tab === 'library') {
+                navigateTo('/dashboard/exam-bank');
+              } else if (tab === 'forum') {
+                navigateTo('/dashboard/forum');
+              } else if (tab === 'leaderboard') {
+                navigateTo('/dashboard/leaderboard');
+              } else if (tab === 'settings') {
+                navigateTo('/dashboard/settings');
+              } else if (tab === 'landing') {
+                navigateTo('/');
+              } else if (['referrals', 'commissions', 'payouts', 'materials'].includes(tab)) {
+                navigateTo(`/dashboard/${tab}`);
+              } else {
+                navigateTo('/dashboard/home');
+              }
+            }}
+            userProfile={currentUser}
+            onLogout={handleLogout}
+            onUpgradePRO={() => setShowUpgradePRO(true)}
+          />
+        </div>
       )}
 
-      <div className="main-wrapper" style={{ marginLeft: (role === 'guest' || role === 'admin' || activeTab === 'landing' || parsedRoute.route.startsWith('mock-') || parsedRoute.route === 'learn' || parsedRoute.route === 'admin') ? 0 : 'var(--sidebar-width)' }}>
-        <main className="main-content" style={(role === 'guest' || role === 'admin' || activeTab === 'landing' || parsedRoute.route.startsWith('mock-') || parsedRoute.route === 'learn' || parsedRoute.route === 'flashcards' || parsedRoute.route === 'ai-tutor' || parsedRoute.route === 'admin') ? { maxWidth: '100%', padding: 0 } : { maxWidth: '100%' }}>
+      {/* Floating Sidebar toggle handle for fullscreen mode */}
+      {effectiveRole !== 'guest' && effectiveRole !== 'admin' && parsedRoute.route === 'dashboard' && ['path', 'ai-qa', 'library'].includes(parsedRoute.tab) && (
+        <button
+          onClick={() => setIsFullscreen(!isFullscreen)}
+          style={{
+            position: 'fixed',
+            top: '50%',
+            left: isFullscreen ? '0' : 'var(--sidebar-width)',
+            transform: 'translateY(-50%)',
+            width: '20px',
+            height: '60px',
+            background: 'var(--primary)',
+            color: '#fff',
+            border: '1px solid rgba(255, 255, 255, 0.15)',
+            borderLeft: isFullscreen ? 'none' : '1px solid rgba(255, 255, 255, 0.15)',
+            borderRadius: isFullscreen ? '0 12px 12px 0' : '12px 0 0 12px',
+            cursor: 'pointer',
+            zIndex: 10001,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '2px 0 8px rgba(0, 0, 0, 0.15)',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            opacity: 0.8,
+            outline: 'none',
+            padding: 0
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.opacity = '1';
+            e.currentTarget.style.width = '24px';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.opacity = '0.8';
+            e.currentTarget.style.width = '20px';
+          }}
+          title={isFullscreen ? "Hiện menu điều hướng" : "Ẩn menu điều hướng (Toàn màn hình)"}
+        >
+          <span style={{ fontSize: '10px', fontWeight: 'bold' }}>
+            {isFullscreen ? '▶' : '◀'}
+          </span>
+        </button>
+      )}
+
+      <div 
+        className="main-wrapper" 
+        style={{ 
+          marginLeft: (effectiveRole === 'guest' || effectiveRole === 'admin' || parsedRoute.route !== 'dashboard') ? 0 : (isEffectiveFullscreen ? 0 : 'var(--sidebar-width)'),
+          transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+        }}
+      >
+        <main 
+          className="main-content" 
+          style={(effectiveRole === 'guest' || effectiveRole === 'admin' || parsedRoute.route !== 'dashboard' || isEffectiveFullscreen) ? { maxWidth: '100%', padding: 0 } : { maxWidth: '100%' }}
+        >
+          {previewRole && (
+            <div style={{
+              background: '#FFC229',
+              color: '#000',
+              borderBottom: '3.5px solid #000',
+              padding: '12px 24px',
+              fontWeight: '900',
+              fontSize: '13.5px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              zIndex: 2000,
+              position: 'relative',
+              boxShadow: '0 4px 6px rgba(0,0,0,0.05)'
+            }}>
+              <span>💡 Bạn đang xem trước với tư cách: <strong style={{ textTransform: 'uppercase' }}>{previewRole === 'student' ? 'Học sinh (Student)' : 'Giáo viên (Teacher)'}</strong></span>
+              <button 
+                onClick={() => {
+                  setPreviewRole(null);
+                  if (role === 'admin') navigateTo('/admin');
+                  else if (role === 'teacher') navigateTo('/dashboard/home');
+                }}
+                className="lp-btn--ghost" 
+                style={{ padding: '6px 14px', fontSize: '12.5px', border: '2px solid #000', borderRadius: '8px', background: '#fff', cursor: 'pointer' }}
+              >
+                Thoát xem trước
+              </button>
+            </div>
+          )}
           {currentUser && parsedRoute.route.startsWith('mock-') && parsedRoute.route !== 'mock-exam-taking' && (
             <div className="mock-exams-simple-header">
               <button onClick={() => navigateTo('/')} className="mock-exams-back-btn">
@@ -1900,10 +2137,16 @@ export default function App() {
             </div>
           )}
 
-          {role !== 'guest' && activeTab !== 'landing' ? (
-            !parsedRoute.route.startsWith('mock-') && parsedRoute.route !== 'flashcards' && parsedRoute.route !== 'ai-tutor' && parsedRoute.route !== 'learn' && (
+          {effectiveRole !== 'guest' && parsedRoute.route === 'dashboard' ? (
+            <div style={{
+              transform: isEffectiveFullscreen ? 'translateY(-100%)' : 'none',
+              opacity: isEffectiveFullscreen ? 0 : 1,
+              maxHeight: isEffectiveFullscreen ? '0px' : '200px',
+              overflow: 'hidden',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+            }}>
               <Header
-                role={role}
+                role={effectiveRole}
                 userProfile={currentUser}
                 theme={theme}
                 onToggleTheme={handleToggleTheme}
@@ -1911,13 +2154,13 @@ export default function App() {
                 onClearNotifications={() => setNotifications(prev => prev.map(n => ({ ...n, read: true })))}
                 onLogout={handleLogout}
                 onChangePassword={handleChangePassword}
-                onNavigateSettings={() => { navigateTo('/'); setActiveTab('settings'); setActiveCourseDetails(null); setActiveTestSimulator(null); setActiveOCRScanner(null); }}
+                onNavigateSettings={() => { navigateTo('/dashboard/settings'); }}
                 addLog={addLog}
-                cartCourse={cartCourse}
-                onCheckoutCourse={(course) => setCheckoutCourse(course)}
+                cartCourses={cartCourses}
+                onCheckoutCourse={handleCheckoutCourse}
               />
-            )
-          ) : (
+            </div>
+          ) : !isEffectiveFullscreen ? (
             // Minimal Header for Guests
             <>
               {theme === 'dark' && parsedRoute.route !== 'mock-exam-taking' && (
@@ -1928,10 +2171,10 @@ export default function App() {
                 </div>
               )}
             </>
-          )}
+          ) : null}
 
           {/* ================= PUBLIC OR PREVIEW LANDING PAGE ================= */}
-          {(role === 'guest' || role === 'admin' || activeTab === 'landing') && parsedRoute.route !== 'admin' && !parsedRoute.route.startsWith('mock-') && parsedRoute.route !== 'ai-tutor' && parsedRoute.route !== 'exam-bank' && parsedRoute.route !== 'flashcards' && (
+          {(parsedRoute.route === 'landing' || parsedRoute.route.startsWith('public-')) && parsedRoute.route !== 'admin' && (
             <div>
               {role === 'guest' && activeTab === 'reset-password' ? (
                 <div className="auth-page-layout" style={{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '80vh', padding: '20px' }}>
@@ -1974,7 +2217,7 @@ export default function App() {
                           XÁC NHẬN ĐỔI MẬT KHẨU
                         </button>
                         <div style={{ textAlign: 'center', marginTop: '16px' }}>
-                          <button type="button" onClick={() => setActiveTab('login')} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline' }}>
+                          <button type="button" onClick={() => navigateTo('/')} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline' }}>
                             Quay lại đăng nhập
                           </button>
                         </div>
@@ -1994,13 +2237,13 @@ export default function App() {
                   }}
                   usersList={usersList}
                   addLog={addLog}
-                  onBackToLanding={() => setActiveTab('home')}
+                  onBackToLanding={() => navigateTo('/')}
                 />
               ) : (
                 <LandingPage
                   courses={courses}
                   currentUser={currentUser}
-                  onNavigateToAuth={(mode) => setActiveTab(mode)}
+                  onNavigateToAuth={(mode) => { navigateTo('/'); setActiveTab(mode); }}
                   onBackToDashboard={handleBackToDashboard}
                   onLogout={handleLogout}
                   forumPosts={forumPosts}
@@ -2008,12 +2251,12 @@ export default function App() {
                   onLikePost={handleForumLikePost}
                   onAddComment={handleForumAddComment}
                   onAcceptCommentSolution={handleForumAcceptCommentSolution}
-                  onCheckoutCourse={(course) => setCheckoutCourse(course)}
+                  onCheckoutCourse={handleCheckoutCourse}
                   onNavigateToLearn={(courseId, lessonId) => {
                     if (currentUser) {
-                      setActiveTab('home');
                       navigateTo(`/learn/${courseId}${lessonId ? `/lesson/${lessonId}` : ''}`);
                     } else {
+                      navigateTo('/');
                       setActiveTab('signup');
                     }
                   }}
@@ -2023,7 +2266,7 @@ export default function App() {
                   }}
                   currentPath={currentPath}
                   navigateTo={navigateTo}
-                  cartCourse={cartCourse}
+                  cartCourses={cartCourses}
                   onAddToCart={handleAddToCart}
                 />
               )}
@@ -2042,137 +2285,20 @@ export default function App() {
             </div>
           )}
 
-          {/* ================= MOCK EXAMS ROUTER WORKSPACE (PUBLIC ACCESS) ================= */}
-          {parsedRoute.route.startsWith('mock-') && (
-            <div className="mock-exams-workspace-wrapper" style={{ padding: '20px 0' }}>
-              {parsedRoute.route === 'mock-exams-list' && (
-                <MockExamsPage
-                  currentUser={currentUser}
-                  onSelectExam={(examId) => navigateTo(`/mock-exams/${examId}`)}
-                  navigateTo={navigateTo}
-                  examsList={examsList}
-                />
-              )}
-
-              {parsedRoute.route === 'mock-exam-detail' && (
-                <MockExamDetailPage
-                  examId={parsedRoute.examId}
-                  currentUser={currentUser}
-                  onStartExam={(examId) => navigateTo(`/mock-exams/${examId}/start`)}
-                  navigateTo={navigateTo}
-                />
-              )}
-
-              {parsedRoute.route === 'mock-exam-taking' && (
-                <MockExamTakingPage
-                  examId={parsedRoute.examId}
-                  currentUser={currentUser}
-                  onFinished={(examId, attemptId) => navigateTo(`/mock-exams/${examId}/result/${attemptId}`)}
-                  navigateTo={navigateTo}
-                />
-              )}
-
-              {parsedRoute.route === 'mock-exam-result' && (
-                <MockExamResultPage
-                  examId={parsedRoute.examId}
-                  attemptId={parsedRoute.attemptId}
-                  currentUser={currentUser}
-                  navigateTo={navigateTo}
-                />
-              )}
-            </div>
-          )}
-
-          {/* ================= COURSES ROUTER WORKSPACE ================= */}
-          {role !== 'guest' && activeTab !== 'landing' && (parsedRoute.route === 'courses-list' || parsedRoute.route === 'course-detail') && (
-            <div style={{ padding: '20px 0' }}>
-              {parsedRoute.route === 'courses-list' && (
-                role === 'student' ? (
-                  <div className="cp-page-container">
-                    <div className="cp-page animate-in">
-                      <CourseMall
-                        courses={courses}
-                        currentUser={currentUser}
-                        onSelectCourse={(course) => navigateTo(`/courses/${course.id}`)}
-                        onLearnCourse={(course) => navigateTo(`/learn/${course.id}`)}
-                        onCheckoutCourse={(course) => setCheckoutCourse(course)}
-                        onRegisterLead={handleRegisterLead}
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <CoursesPage
-                    courses={courses}
-                    currentUser={currentUser}
-                    onSelectCourse={(course) => navigateTo(`/courses/${course.id}`)}
-                    onCheckoutCourse={(course) => setCheckoutCourse(course)}
-                    navigateTo={navigateTo}
-                  />
-                )
-              )}
-
-              {parsedRoute.route === 'course-detail' && (
-                <CourseDetailPage
-                  courseId={parsedRoute.courseId}
-                  currentUser={currentUser}
-                  onNavigateToLearn={(courseId, lessonId, isDemo = false) => {
-                    const demoQuery = isDemo ? '?demo=true' : '';
-                    navigateTo(`/learn/${courseId}${lessonId ? `/lesson/${lessonId}` : ''}${demoQuery}`);
-                  }}
-                  onUpdateUser={(updated) => {
-                    setCurrentUser(updated);
-                    const updatedList = usersList.map(u => u.email === updated.email ? updated : u);
-                    setUsersList(updatedList);
-                  }}
-                  navigateTo={navigateTo}
-                  onAddToCart={handleAddToCart}
-                  onCheckoutCourse={(course) => setCheckoutCourse(course)}
-                />
-              )}
-            </div>
-          )}
-
-          {/* ================= AI TUTOR WORKSPACE ================= */}
-          {parsedRoute.route === 'ai-tutor' && (
-            <div style={{ padding: '0', background: '#141410', minHeight: '100vh' }}>
-              <AITutorPage
-                currentUser={currentUser}
-                navigateTo={navigateTo}
-                addLog={addLog}
-              />
-            </div>
-          )}
-
-          {/* ================= FLASHCARDS WORKSPACE ================= */}
-          {parsedRoute.route === 'flashcards' && (
-            <div style={{ padding: '0', background: '#141410', minHeight: '100vh' }}>
-              <FlashcardPage
-                currentUser={currentUser}
-                navigateTo={navigateTo}
-                addLog={addLog}
-              />
-            </div>
-          )}
-
-          {/* ================= EXAM BANK PAGE ================= */}
-          {parsedRoute.route === 'exam-bank' && (
-            <div style={{ padding: '0' }}>
-              <ExamBankPage
-                currentUser={currentUser}
-                navigateTo={navigateTo}
-              />
-            </div>
-          )}
-
-          {/* ================= FORUM WORKSPACE ================= */}
-          {parsedRoute.route === 'forum' && (
-            <div style={{ padding: '0' }}>
-              <Forum currentUser={currentUser} />
-            </div>
+          {/* ================= DEVTOOLS MANUAL HELPER ================= */}
+          {parsedRoute.route === 'devtools' && import.meta.env.DEV && (
+            <DevToolsPage
+              currentUser={currentUser}
+              setCurrentUser={setCurrentUser}
+              navigateTo={navigateTo}
+              handleAuthSuccess={handleAuthSuccess}
+              handleLogout={handleLogout}
+              addLog={addLog}
+            />
           )}
 
           {/* ================= STUDENT LEARNING WORKSPACE ================= */}
-          {(role === 'student' || window.location.search.includes('demo=true')) && activeTab !== 'landing' && parsedRoute.route === 'learn' && (
+          {(effectiveRole === 'student' || window.location.search.includes('demo=true')) && parsedRoute.route === 'learn' && (
             <div style={{ padding: '20px 0' }}>
               <LearningPage
                 courseId={parsedRoute.courseId}
@@ -2185,19 +2311,26 @@ export default function App() {
           )}
 
           {/* ================= STUDENT WORKSPACE ================= */}
-          {role === 'student' && activeTab !== 'landing' && parsedRoute.route === 'legacy' && !activeCourseDetails && !activeTestSimulator && !activeOCRScanner && (
-
-            <div>
-              {activeTab === 'home' && (
+          {effectiveRole === 'student' && parsedRoute.route === 'dashboard' && !activeCourseDetails && !activeTestSimulator && !activeOCRScanner && (
+            <RouteGuard allowedRoles={['STUDENT', 'TEACHER', 'ADMIN']} currentUser={currentUser}>
+              <div>
+              {parsedRoute.tab === 'home' && (
                 <StudentDashboard
                   currentUser={currentUser}
-                  setActiveTab={setActiveTab}
+                  setActiveTab={(tab) => {
+                    if (tab === 'courses') navigateTo('/dashboard/courses');
+                    else if (tab === 'tests') navigateTo('/dashboard/mock-exams');
+                    else if (tab === 'path') navigateTo('/dashboard/flashcards');
+                    else if (tab === 'forum') navigateTo('/dashboard/forum');
+                    else if (tab === 'leaderboard') navigateTo('/dashboard/leaderboard');
+                    else navigateTo('/dashboard/home');
+                  }}
                   navigateTo={navigateTo}
                 />
               )}
 
               {/* Learning path adaptive roadmap tab */}
-              {activeTab === 'path' && (
+              {parsedRoute.tab === 'path' && (
                 <FlashcardPage
                   currentUser={currentUser}
                   navigateTo={navigateTo}
@@ -2206,23 +2339,23 @@ export default function App() {
               )}
 
               {/* Courses tab */}
-              {activeTab === 'courses' && (
+              {parsedRoute.tab === 'courses' && (
                 <CourseMall
                   courses={courses}
                   currentUser={currentUser}
                   onSelectCourse={setActiveCourseDetails}
-                  onCheckoutCourse={setCheckoutCourse}
+                  onCheckoutCourse={handleCheckoutCourse}
                   onRegisterLead={handleRegisterLead}
                 />
               )}
 
               {/* Forum tab */}
-              {activeTab === 'forum' && (
+              {parsedRoute.tab === 'forum' && (
                 <Forum currentUser={currentUser} />
               )}
 
               {/* Leaderboard tab */}
-              {activeTab === 'leaderboard' && (
+              {parsedRoute.tab === 'leaderboard' && (
                 <div className="card animate-in" style={{ border: '3px solid #000', boxShadow: '5px 5px 0px #000', padding: '28px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2.5px solid #000', paddingBottom: '16px', marginBottom: '20px' }}>
                     <div>
@@ -2241,7 +2374,7 @@ export default function App() {
               )}
 
               {/* Online Mock Exams tab */}
-              {activeTab === 'tests' && (
+              {parsedRoute.tab === 'tests' && (
                 <div className="exams-lobby-layout animate-in">
                   
                   {/* Left Column: Main Exams Panel */}
@@ -2825,7 +2958,7 @@ export default function App() {
               )}
 
               {/* AI Q&A Tutor tab */}
-              {activeTab === 'ai-qa' && (
+              {parsedRoute.tab === 'ai-qa' && (
                 <AITutorPage
                   currentUser={currentUser}
                   navigateTo={navigateTo}
@@ -2834,12 +2967,12 @@ export default function App() {
               )}
 
               {/* Library docs downloads tab */}
-              {activeTab === 'library' && (
+              {parsedRoute.tab === 'library' && (
                 <LibraryCabinet addLog={addLog} />
               )}
 
               {/* Settings Profile tab */}
-              {activeTab === 'settings' && (
+              {parsedRoute.tab === 'settings' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '1100px', margin: '0 auto' }} className="animate-in">
                   <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
                     <h3 style={{ fontSize: '20px', fontWeight: '800', color: 'var(--text-primary)' }}>⚙️ CÀI ĐẶT TÀI KHOẢN & HỒ SƠ</h3>
@@ -3202,7 +3335,7 @@ export default function App() {
                       type="button"
                       onClick={() => {
                         // Reset changes
-                        setActiveTab('home');
+                        navigateTo('/dashboard/home');
                       }}
                       className="header-icon-btn"
                       style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '10px 20px', fontSize: '13px', height: 'auto', color: 'var(--text-secondary)' }}
@@ -3244,81 +3377,122 @@ export default function App() {
                 </div>
               )}
             </div>
+            </RouteGuard>
           )}
 
           {/* Student classroom details view */}
-          {role === 'student' && activeTab !== 'landing' && activeCourseDetails && (
-            <CourseDetails
-              course={activeCourseDetails}
-              onBack={() => setActiveCourseDetails(null)}
-              addLog={addLog}
-            />
+          {effectiveRole === 'student' && parsedRoute.route === 'dashboard' && activeCourseDetails && (
+            <RouteGuard allowedRoles={['STUDENT', 'TEACHER', 'ADMIN']} currentUser={currentUser}>
+              <CourseDetails
+                course={activeCourseDetails}
+                onBack={() => setActiveCourseDetails(null)}
+                addLog={addLog}
+              />
+            </RouteGuard>
           )}
 
           {/* Student active test simulator taking view */}
-          {role === 'student' && activeTab !== 'landing' && activeTestSimulator && (
-            <TestSimulator
-              exam={typeof activeTestSimulator === 'object' ? activeTestSimulator : null}
-              testName={typeof activeTestSimulator === 'object' ? activeTestSimulator.title : activeTestSimulator}
-              onFinished={handleFinishedTest}
-              addLog={addLog}
-            />
+          {effectiveRole === 'student' && parsedRoute.route === 'dashboard' && activeTestSimulator && (
+            <RouteGuard allowedRoles={['STUDENT', 'TEACHER', 'ADMIN']} currentUser={currentUser}>
+              <TestSimulator
+                exam={typeof activeTestSimulator === 'object' ? activeTestSimulator : null}
+                testName={typeof activeTestSimulator === 'object' ? activeTestSimulator.title : activeTestSimulator}
+                onFinished={handleFinishedTest}
+                addLog={addLog}
+              />
+            </RouteGuard>
           )}
 
           {/* Student active OCR Scanner view */}
-          {role === 'student' && activeTab !== 'landing' && activeOCRScanner && (
-            <OCRScanner
-              examsList={examsList}
-              onBack={() => setActiveOCRScanner(null)}
-              addLog={addLog}
-            />
+          {effectiveRole === 'student' && parsedRoute.route === 'dashboard' && activeOCRScanner && (
+            <RouteGuard allowedRoles={['STUDENT', 'TEACHER', 'ADMIN']} currentUser={currentUser}>
+              <OCRScanner
+                examsList={examsList}
+                onBack={() => setActiveOCRScanner(null)}
+                addLog={addLog}
+              />
+            </RouteGuard>
           )}
 
           {/* ================= TEACHER WORKSPACE ================= */}
-          {role === 'teacher' && activeTab !== 'landing' && (
-            activeTab === 'forum' ? (
-              <Forum currentUser={currentUser} />
-            ) : (
-              <TeacherDashboard
-                courses={courses}
-                onCreateCourse={handleCreateCourse}
-                onDeleteCourse={handleDeleteCourse}
-                questionBank={questionBank}
-                onAddQuestion={handleAddQuestion}
-                addLog={addLog}
-                activeTab={activeTab}
-                setActiveTab={setActiveTab}
+          {(effectiveRole === 'teacher' && (parsedRoute.route === 'dashboard' || parsedRoute.route === 'teacher')) && (
+            <RouteGuard allowedRoles={['TEACHER', 'ADMIN']} currentUser={currentUser}>
+              {parsedRoute.tab === 'forum' ? (
+                <Forum currentUser={currentUser} />
+              ) : (
+                <TeacherDashboard
+                  courses={courses}
+                  onCreateCourse={handleCreateCourse}
+                  onDeleteCourse={handleDeleteCourse}
+                  questionBank={questionBank}
+                  onAddQuestion={handleAddQuestion}
+                  addLog={addLog}
+                  activeTab={parsedRoute.tab}
+                  setActiveTab={(tab) => {
+                    const prefix = parsedRoute.route === 'teacher' ? '/teacher' : '/dashboard';
+                    if (tab === 'courses') navigateTo(`${prefix}/courses`);
+                    else if (tab === 'forum') navigateTo(`${prefix}/forum`);
+                    else if (tab === 'questions') navigateTo(`${prefix}/questions`);
+                    else if (tab === 'stats') navigateTo(`${prefix}/stats`);
+                    else if (tab === 'settings') navigateTo(`${prefix}/settings`);
+                    else navigateTo(`${prefix}/home`);
+                  }}
+                  setPreviewRole={setPreviewRole}
+                />
+              )}
+            </RouteGuard>
+          )}
+
+          {/* ================= AFFILIATE WORKSPACE ================= */}
+          {effectiveRole === 'affiliate' && parsedRoute.route === 'dashboard' && (
+            <RouteGuard allowedRoles={['AFFILIATE', 'ADMIN']} currentUser={currentUser}>
+              <AffiliateDashboard
+                currentUser={currentUser}
+                activeTab={parsedRoute.tab}
+                setActiveTab={(tab) => {
+                  if (tab === 'leaderboard') navigateTo('/dashboard/leaderboard');
+                  else if (tab === 'settings') navigateTo('/dashboard/settings');
+                  else if (tab === 'home') navigateTo('/dashboard/home');
+                  else navigateTo(`/dashboard/${tab}`);
+                }}
+                navigateTo={navigateTo}
               />
-            )
+            </RouteGuard>
           )}
 
           {/* ================= ADMIN WORKSPACE ================= */}
-          {parsedRoute.route === 'admin' && role === 'admin' && activeTab !== 'landing' && (
-            activeTab === 'forum' ? (
-              <Forum currentUser={currentUser} />
-            ) : (
-              <AdminDashboard
-                users={usersList}
-                onToggleUserBan={handleToggleUserBan}
-                onApproveTeacher={handleApproveTeacher}
-                courseApprovals={courseApprovals}
-                onApproveCourse={handleApproveCourse}
-                onRejectCourse={handleRejectCourse}
-                onSendAnnouncement={handleSendAnnouncement}
-                systemLogs={systemLogs}
-                addLog={addLog}
-                activeTab={activeTab}
-                setActiveTab={setActiveTab}
-                navigateTo={navigateTo}
-                submissions={submissions}
-                leadsList={leadsList}
-                setLeadsList={setLeadsList}
-                booksList={booksList}
-                setBooksList={setBooksList}
-                featureFlags={featureFlags}
-                setFeatureFlags={setFeatureFlags}
-              />
-            )
+          {parsedRoute.route === 'admin' && (
+            <RouteGuard allowedRoles={['ADMIN']} currentUser={currentUser}>
+              {parsedRoute.tab === 'forum' ? (
+                <Forum currentUser={currentUser} />
+              ) : (
+                <AdminDashboard
+                  users={usersList}
+                  onToggleUserBan={handleToggleUserBan}
+                  onApproveTeacher={handleApproveTeacher}
+                  courseApprovals={courseApprovals}
+                  onApproveCourse={handleApproveCourse}
+                  onRejectCourse={handleRejectCourse}
+                  onSendAnnouncement={handleSendAnnouncement}
+                  systemLogs={systemLogs}
+                  addLog={addLog}
+                  activeTab={parsedRoute.tab}
+                  setActiveTab={(tab) => {
+                    if (tab === 'home') navigateTo('/admin');
+                    else navigateTo(`/admin/${tab}`);
+                  }}
+                  navigateTo={navigateTo}
+                  submissions={submissions}
+                  leadsList={leadsList}
+                  setLeadsList={setLeadsList}
+                  booksList={booksList}
+                  setBooksList={setBooksList}
+                  featureFlags={featureFlags}
+                  setFeatureFlags={setFeatureFlags}
+                  setPreviewRole={setPreviewRole}
+                />
+              )}
+            </RouteGuard>
           )}
         </main>
       </div>
@@ -3326,9 +3500,17 @@ export default function App() {
       {/* Checkout Shopping Portal */}
       {checkoutCourse && (
         <CheckoutModal
-          course={checkoutCourse}
+          courses={cartCourses}
           onClose={() => setCheckoutCourse(null)}
           onPaymentSuccess={handlePaymentSuccess}
+          onRemoveCourse={(courseId) => {
+            const updated = cartCourses.filter(c => c.id !== courseId);
+            setCartCourses(updated);
+            localStorage.setItem('app_cart_courses', JSON.stringify(updated));
+            if (updated.length === 0) {
+              setCheckoutCourse(null);
+            }
+          }}
           addLog={addLog}
         />
       )}
@@ -3343,7 +3525,13 @@ export default function App() {
       )}
 
       {/* Public Chatbot AI floating button and chat dialog */}
-      {parsedRoute.route !== 'flashcards' && activeTab !== 'path' && (
+      {parsedRoute.route !== 'public-flashcards' && 
+       parsedRoute.route !== 'public-ai-tutor' && 
+       parsedRoute.route !== 'public-mock-exam-taking' && 
+       parsedRoute.route !== 'learn' && 
+       parsedRoute.tab !== 'path' && 
+       parsedRoute.tab !== 'ai-qa' && 
+       !activeTestSimulator && (
         <ChatbotWidget />
       )}
 

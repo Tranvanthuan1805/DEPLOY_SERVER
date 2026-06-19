@@ -27,6 +27,11 @@ model User {
   roleChangeRequests RoleChangeRequest[]
   student            Student?
   teacher            Teacher?
+  referredBy         Int?
+  referrer           User?                @relation("UserReferral", fields: [referredBy], references: [id])
+  referredUsers      User[]               @relation("UserReferral")
+  asReferral         Referral?            @relation("ReferredUser")
+  affiliate          Affiliate?
 
   // Forum Relations
   forumPosts         ForumPost[]
@@ -53,6 +58,7 @@ model User {
   examAnalyses         ExamPaperAnalysis[]
   uploadedExamFiles    UploadedExamFile[]
   weaknessMindmaps     WeaknessMindmap[]
+  apiAuditLogs         AuditLog[]
 }
 
 
@@ -74,6 +80,7 @@ model Teacher {
   bio        String?
   courses    Course[]
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  materials  TeacherMaterial[]
 }
 
 model Admin {
@@ -87,6 +94,7 @@ model Course {
   description  String
   subject      String
   level        String?
+  grade        Int?
   price        Float
   discount     Int          @default(0)
   thumbnailUrl String?
@@ -132,6 +140,7 @@ model Question {
   difficulty     Difficulty          @default(MEDIUM)
   createdBy      Int
   imageUrl       String?
+  audioUrl       String?
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @default(now()) @updatedAt
   examQuestions  ExamQuestion[]
@@ -151,6 +160,7 @@ model Exam {
   totalQuestions Int            @default(0)
   difficulty     Difficulty     @default(MEDIUM)
   status         String         @default("published")
+  grade          Int?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @default(now()) @updatedAt
   examQuestions  ExamQuestion[]
@@ -271,6 +281,7 @@ enum Role {
   STUDENT
   TEACHER
   ADMIN
+  AFFILIATE
 }
 
 enum Difficulty {
@@ -850,6 +861,134 @@ model UploadedExamFile {
 
   @@map("uploaded_exam_files")
 }
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userRole  Role
+  action    String
+  target    String
+  payload   Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+enum AffiliateTier {
+  BRONZE
+  SILVER
+  GOLD
+  PLATINUM
+}
+
+enum CommissionStatus {
+  PENDING
+  APPROVED
+  PAID
+  CANCELLED
+}
+
+model Affiliate {
+  userId           Int               @id
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  referralCode     String            @unique
+  commissionRate   Float             @default(0.15)
+  totalEarnings    Float             @default(0)
+  pendingEarnings  Float             @default(0)
+  paidEarnings     Float             @default(0)
+  tier             AffiliateTier     @default(BRONZE)
+  bankAccount      String?
+  bankName         String?
+  taxId            String?
+  payoutMethod     String?
+  isApproved       Boolean           @default(false)
+  approvedAt       DateTime?
+  createdAt        DateTime          @default(now())
+  referrals        Referral[]
+  commissions      Commission[]
+  payouts          Payout[]
+  materials        AffiliateMaterial[]
+}
+
+model Referral {
+  id              Int        @id @default(autoincrement())
+  affiliateId     Int
+  affiliate       Affiliate  @relation(fields: [affiliateId], references: [userId], onDelete: Cascade)
+  referredUserId  Int        @unique
+  referredUser    User       @relation("ReferredUser", fields: [referredUserId], references: [id], onDelete: Cascade)
+  source          String?
+  campaign        String?
+  clickedAt       DateTime   @default(now())
+  convertedAt     DateTime?
+  isConverted     Boolean    @default(false)
+}
+
+model Commission {
+  id            Int        @id @default(autoincrement())
+  affiliateId   Int
+  affiliate     Affiliate  @relation(fields: [affiliateId], references: [userId], onDelete: Cascade)
+  orderId       Int
+  amount        Float
+  rate          Float
+  status        CommissionStatus @default(PENDING)
+  earnedAt      DateTime   @default(now())
+  approvedAt    DateTime?
+  paidAt        DateTime?
+}
+
+model Payout {
+  id            Int       @id @default(autoincrement())
+  affiliateId   Int
+  affiliate     Affiliate @relation(fields: [affiliateId], references: [userId], onDelete: Cascade)
+  amount        Float
+  method        String
+  status        String    @default("PENDING")
+  requestedAt   DateTime  @default(now())
+  completedAt   DateTime?
+  transactionId String?
+  receiptUrl    String?
+}
+
+model AffiliateMaterial {
+  id            Int       @id @default(autoincrement())
+  affiliateId   Int
+  affiliate     Affiliate @relation(fields: [affiliateId], references: [userId], onDelete: Cascade)
+  type          String
+  targetUrl     String
+  imageUrl      String?
+  copy          String?
+  clicks        Int       @default(0)
+  conversions   Int       @default(0)
+  createdAt     DateTime  @default(now())
+}
+
+model TeacherMaterial {
+  id            Int       @id @default(autoincrement())
+  teacherId     Int
+  teacher       Teacher   @relation(fields: [teacherId], references: [userId], onDelete: Cascade)
+  title         String
+  description   String?
+  subject       String
+  grade         String?
+  fileUrl       String
+  fileType      String
+  fileSize      Int
+  thumbnailUrl  String?
+  tags          String[]
+  isPublic      Boolean   @default(false)
+  isApproved    Boolean   @default(false)
+  downloadCount Int       @default(0)
+  viewCount     Int       @default(0)
+  price         Float     @default(0)
+  uploadedAt    DateTime  @default(now())
+}
+
 
 
 

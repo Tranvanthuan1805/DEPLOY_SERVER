@@ -632,6 +632,18 @@ async function main() {
     }
   });
 
+  // Post-process grades: distribute courses across grade 10, 11, 12 to populate filters
+  console.log('[Seed Courses] Post-processing course grades...');
+  const allSeededCourses = await prisma.course.findMany();
+  for (let i = 0; i < allSeededCourses.length; i++) {
+    const course = allSeededCourses[i];
+    const grade = 10 + (i % 3); // 10, 11, 12
+    await prisma.course.update({
+      where: { id: course.id },
+      data: { grade }
+    });
+  }
+
   console.log('[Seed Courses] Seeding completed successfully!');
 }
 

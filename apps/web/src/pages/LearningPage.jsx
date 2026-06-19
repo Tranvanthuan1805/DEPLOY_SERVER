@@ -29,6 +29,88 @@ export default function LearningPage({ courseId, lessonId, currentUser, onSelect
   const [aiTyping, setAiTyping] = useState(false);
   const messagesEndRef = useRef(null);
 
+  const videoRef = useRef(null);
+  const [timestampNotes, setTimestampNotes] = useState([]);
+  const [newNoteText, setNewNoteText] = useState('');
+  const [noteMode, setNoteMode] = useState('timeline'); // timeline, general
+  const [videoTime, setVideoTime] = useState(0);
+
+  const activeNoteId = useMemo(() => {
+    if (!timestampNotes || timestampNotes.length === 0) return null;
+    const matches = timestampNotes.filter(n => n.time <= videoTime);
+    if (matches.length === 0) return null;
+    return matches[matches.length - 1].id;
+  }, [timestampNotes, videoTime]);
+
+  useEffect(() => {
+    if (activeNoteId) {
+      const activeEl = document.getElementById(`note-item-${activeNoteId}`);
+      if (activeEl) {
+        activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+  }, [activeNoteId]);
+
+  const formatTime = (secs) => {
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  // Load timestamped notes
+  useEffect(() => {
+    if (!currentLesson || !courseId) return;
+    const key = `course_timenotes_${courseId}_lesson_${currentLesson.id}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      try {
+        setTimestampNotes(JSON.parse(saved));
+      } catch (_) {
+        setTimestampNotes([]);
+      }
+    } else {
+      setTimestampNotes([]);
+    }
+  }, [courseId, currentLesson]);
+
+  // Save timestamped notes helper
+  const saveTimestampNotes = (notesList) => {
+    setTimestampNotes(notesList);
+    if (currentLesson && courseId) {
+      const key = `course_timenotes_${courseId}_lesson_${currentLesson.id}`;
+      localStorage.setItem(key, JSON.stringify(notesList));
+    }
+  };
+
+  const handleAddTimestampNote = (e) => {
+    e.preventDefault();
+    if (!newNoteText.trim() || !videoRef.current) return;
+    
+    const currentTime = Math.floor(videoRef.current.currentTime);
+    const newNote = {
+      id: Date.now(),
+      time: currentTime,
+      text: newNoteText.trim()
+    };
+    
+    const updated = [...timestampNotes, newNote].sort((a, b) => a.time - b.time);
+    saveTimestampNotes(updated);
+    setNewNoteText('');
+    toast('Đã lưu ghi chú tại thời điểm phát!', 'success');
+  };
+
+  const handleDeleteTimestampNote = (id) => {
+    const updated = timestampNotes.filter(n => n.id !== id);
+    saveTimestampNotes(updated);
+  };
+
+  const handleSeekTo = (secs) => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = secs;
+      videoRef.current.play().catch(() => {});
+    }
+  };
+
   // Resizer state
   const [notebookWidth, setNotebookWidth] = useState(380);
   const isResizingRef = useRef(false);
@@ -158,13 +240,23 @@ export default function LearningPage({ courseId, lessonId, currentUser, onSelect
     if (!currentLesson) return;
     setLoading(true);
 
-    // Mock materials specifically tailored for the lesson
-    const fallbackMaterials = [
-      { id: `${currentLesson.id}_m1`, title: `Sổ tay lý thuyết trọng tâm - ${currentLesson.title}`, file_type: 'PDF' },
-      { id: `${currentLesson.id}_m2`, title: `Bài tập trắc nghiệm tự luyện kèm giải chi tiết - ${currentLesson.title}`, file_type: 'PDF' },
-      { id: `${currentLesson.id}_m3`, title: `Slide bài giảng sơ đồ tư duy - ${currentLesson.title}`, file_type: 'Slide' }
-    ];
-    setMaterials(fallbackMaterials);
+    // Load materials from backend documents or fallbacks
+    const backendDocs = currentLesson.documents || [];
+    if (backendDocs.length > 0) {
+      setMaterials(backendDocs.map(doc => ({
+        id: String(doc.id),
+        title: doc.title,
+        file_type: doc.fileType || 'PDF',
+        file_url: doc.fileUrl
+      })));
+    } else {
+      const fallbackMaterials = [
+        { id: `${currentLesson.id}_m1`, title: `Sổ tay lý thuyết trọng tâm - ${currentLesson.title}`, file_type: 'PDF' },
+        { id: `${currentLesson.id}_m2`, title: `Bài tập trắc nghiệm tự luyện kèm giải chi tiết - ${currentLesson.title}`, file_type: 'PDF' },
+        { id: `${currentLesson.id}_m3`, title: `Slide bài giảng sơ đồ tư duy - ${currentLesson.title}`, file_type: 'Slide' }
+      ];
+      setMaterials(fallbackMaterials);
+    }
 
     // Fetch discussions properly
     const loadDiscussions = async () => {
@@ -465,9 +557,11 @@ export default function LearningPage({ courseId, lessonId, currentUser, onSelect
               </div>
             ) : (
               <VideoPlayer 
+                ref={videoRef}
                 videoUrl={currentLesson.videoUrl || "https://www.w3schools.com/html/mov_bbb.mp4"}
                 title={currentLesson.title}
                 onEnded={handleNextLesson} // Auto play next lesson when finished!
+                onTimeUpdate={setVideoTime}
               />
             )}
 
@@ -616,50 +710,171 @@ export default function LearningPage({ courseId, lessonId, currentUser, onSelect
                 )}
               </div>
 
-              {/* Notebook Content Panel */}
-              <div style={{ 
-                flex: 1, 
-                position: 'relative',
-                background: '#fffdf5',
-                display: 'flex',
-                flexDirection: 'column'
-              }}>
+              {/* Notebook Content */}
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
                 {notebookTab === 'notes' ? (
-                  <div style={{ flex: 1, position: 'relative', display: 'flex' }}>
-                    {/* Vertical Red Margin Line */}
-                    <div style={{
-                      position: 'absolute',
-                      top: 0,
-                      bottom: 0,
-                      left: '40px',
-                      width: '1px',
-                      background: 'rgba(239, 68, 68, 0.4)',
-                      borderRight: '1px solid rgba(239, 68, 68, 0.2)',
-                      pointerEvents: 'none'
-                    }} />
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
+                    {/* Toggle buttons for noteMode */}
+                    <div style={{ display: 'flex', borderBottom: '1.5px solid var(--border-warm)', background: '#FAF9F6', padding: '6px 12px', gap: '8px', zIndex: 10 }}>
+                      <button 
+                        onClick={() => setNoteMode('timeline')}
+                        style={{ padding: '4px 10px', fontSize: '11px', fontWeight: 'bold', border: '1.5px solid #000', borderRadius: '6px', background: noteMode === 'timeline' ? '#000' : '#fff', color: noteMode === 'timeline' ? '#fff' : '#000', cursor: 'pointer', transition: 'all 0.15s' }}
+                      >
+                        ⏱️ Ghi chú Timing
+                      </button>
+                      <button 
+                        onClick={() => setNoteMode('general')}
+                        style={{ padding: '4px 10px', fontSize: '11px', fontWeight: 'bold', border: '1.5px solid #000', borderRadius: '6px', background: noteMode === 'general' ? '#000' : '#fff', color: noteMode === 'general' ? '#fff' : '#000', cursor: 'pointer', transition: 'all 0.15s' }}
+                      >
+                        📝 Nháp tự do
+                      </button>
+                    </div>
 
-                    {/* Textarea styled on top of lined paper */}
-                    <textarea
-                      placeholder="Ghi chú các công thức hay kiến thức quan trọng của buổi học vào đây..."
-                      value={noteText}
-                      onChange={handleNoteChange}
-                      style={{
-                        flex: 1,
-                        background: 'transparent',
-                        backgroundImage: 'linear-gradient(rgba(0, 0, 255, 0.06) 1px, transparent 1px)',
-                        backgroundSize: '100% 28px',
-                        border: 'none',
-                        outline: 'none',
-                        lineHeight: '28px',
-                        fontSize: '13.5px',
-                        fontFamily: 'inherit',
-                        padding: '10px 15px 10px 52px',
-                        color: 'var(--stone-text-main)',
-                        resize: 'none',
-                        zIndex: 2,
-                        minHeight: '100%'
-                      }}
-                    />
+                    {noteMode === 'general' ? (
+                      <div style={{ flex: 1, position: 'relative', display: 'flex' }}>
+                        {/* Vertical Red Margin Line */}
+                        <div style={{
+                          position: 'absolute',
+                          top: 0,
+                          bottom: 0,
+                          left: '40px',
+                          width: '1px',
+                          background: 'rgba(239, 68, 68, 0.4)',
+                          borderRight: '1px solid rgba(239, 68, 68, 0.2)',
+                          pointerEvents: 'none'
+                        }} />
+
+                        {/* Textarea styled on top of lined paper */}
+                        <textarea
+                          placeholder="Ghi chú các công thức hay kiến thức quan trọng của buổi học vào đây..."
+                          value={noteText}
+                          onChange={handleNoteChange}
+                          style={{
+                            flex: 1,
+                            background: 'transparent',
+                            backgroundImage: 'linear-gradient(rgba(0, 0, 255, 0.06) 1px, transparent 1px)',
+                            backgroundSize: '100% 28px',
+                            border: 'none',
+                            outline: 'none',
+                            lineHeight: '28px',
+                            fontSize: '13.5px',
+                            fontFamily: 'inherit',
+                            padding: '10px 15px 10px 52px',
+                            color: 'var(--stone-text-main)',
+                            resize: 'none',
+                            zIndex: 2,
+                            minHeight: '100%'
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', position: 'relative', paddingBottom: '50px' }}>
+                        {/* Vertical line */}
+                        <div style={{ position: 'absolute', top: 0, bottom: '50px', left: '40px', width: '1px', background: 'rgba(239, 68, 68, 0.3)', pointerEvents: 'none' }} />
+                        
+                        {/* List of timing notes */}
+                        <div style={{
+                          flex: 1,
+                          overflowY: 'auto',
+                          padding: '10px 12px 10px 52px',
+                          backgroundImage: 'linear-gradient(rgba(0, 0, 255, 0.05) 1px, transparent 1px)',
+                          backgroundSize: '100% 28px',
+                          lineHeight: '28px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px',
+                          maxHeight: '340px'
+                        }}>
+                          {timestampNotes.length > 0 ? (
+                            timestampNotes.map((note) => (
+                              <div key={note.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', lineHeight: '20px' }}>
+                                <button
+                                  onClick={() => handleSeekTo(note.time)}
+                                  style={{
+                                    background: 'var(--emerald-light)',
+                                    color: 'var(--emerald-primary)',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    padding: '2px 6px',
+                                    fontSize: '11px',
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap'
+                                  }}
+                                  title="Click để chuyển tới đoạn này"
+                                >
+                                  ⏱️ {formatTime(note.time)}
+                                </button>
+                                <span style={{ fontSize: '13px', color: 'var(--stone-text-main)', flex: 1, wordBreak: 'break-all' }}>{note.text}</span>
+                                <button
+                                  onClick={() => handleDeleteTimestampNote(note.id)}
+                                  style={{ border: 'none', background: 'transparent', color: '#EF4444', cursor: 'pointer', fontSize: '11px' }}
+                                  title="Xóa ghi chú"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            ))
+                          ) : (
+                            <p style={{ fontSize: '12.5px', color: 'var(--stone-text-muted)', fontStyle: 'italic', margin: '12px 0', lineHeight: '20px' }}>
+                              Chưa có ghi chú thời gian. Hãy nghe giảng và nhập ghi chú nhanh ở bên dưới!
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Input form */}
+                        <form 
+                          onSubmit={handleAddTimestampNote}
+                          style={{
+                            height: '50px',
+                            borderTop: '1.5px solid var(--border-warm)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            padding: '8px 12px',
+                            background: '#FAF9F6',
+                            gap: '8px',
+                            position: 'absolute',
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            zIndex: 10
+                          }}
+                        >
+                          <input 
+                            type="text"
+                            placeholder="Ghi chú tại giây hiện tại..."
+                            value={newNoteText}
+                            onChange={(e) => setNewNoteText(e.target.value)}
+                            style={{
+                              flex: 1,
+                              fontSize: '12px',
+                              padding: '6px 10px',
+                              borderRadius: '6px',
+                              border: '1.5px solid var(--border-warm)',
+                              outline: 'none',
+                              background: '#ffffff'
+                            }}
+                            required
+                          />
+                          <button 
+                            type="submit"
+                            style={{
+                              background: 'var(--emerald-primary)',
+                              color: '#fff',
+                              border: 'none',
+                              borderRadius: '6px',
+                              padding: '6px 12px',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                              fontWeight: 'bold',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            Lưu ⏱️
+                          </button>
+                        </form>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>

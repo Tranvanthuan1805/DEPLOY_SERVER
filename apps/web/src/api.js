@@ -188,6 +188,8 @@ export const api = {
 
   getExamHistory: () => request('/users/me/exam-history'),
 
+  getWrongQuestions: () => request('/exams/wrong-questions'),
+
   recordViolation: (attemptId) => request(`/exam-attempts/${attemptId}/violation`, { method: 'POST' }),
 
   recordViolationDetail: (attemptId, violationType) =>
@@ -306,7 +308,10 @@ export const api = {
     request(`/forum/moderation/reports/${id}/resolve`, { method: 'PUT', body: { status, notes } }),
 
   importExam: (examData) =>
-    request('/admin/exams/import', { method: 'POST', body: examData }),
+    request('/exams/import', { method: 'POST', body: examData }),
+
+  updateExamStatus: (id, status) =>
+    request(`/exams/${id}/status`, { method: 'PATCH', body: { status } }),
 
   generateMindmap: (text) =>
     request('/ai/mindmap', {
@@ -392,6 +397,55 @@ export const api = {
     request('/ai/mindmap/exam-analyse', {
       method: 'POST',
       body: payload
-    })
+    }),
+
+  // ==========================================
+  // AFFILIATE SYSTEM API
+  // ==========================================
+  getAffiliateMe: () => request('/affiliate/me'),
+  updateAffiliateMe: (payload) => request('/affiliate/me', { method: 'PUT', body: payload }),
+  getMyReferrals: (page = 1, limit = 10) => request(`/affiliate/me/referrals?page=${page}&limit=${limit}`),
+  getMyCommissions: (status = '') => request(`/affiliate/me/commissions${status ? `?status=${status}` : ''}`),
+  getMyAnalytics: () => request('/affiliate/me/analytics'),
+  requestPayout: (amount) => request('/affiliate/me/payout-request', { method: 'POST', body: { amount } }),
+  getMarketingMaterials: () => request('/affiliate/me/materials'),
+  trackMaterialClick: (materialId, isConversion = false) => request('/affiliate/me/materials/track', { method: 'POST', body: { materialId, isConversion } }),
+  getAffiliateLeaderboard: () => request('/affiliate/leaderboard'),
+
+  // ADMIN AFFILIATE MODERATION
+  getAdminAffiliates: (status = '') => request(`/admin/affiliates${status ? `?status=${status}` : ''}`),
+  approveAffiliate: (id) => request(`/admin/affiliates/${id}/approve`, { method: 'POST' }),
+  rejectAffiliate: (id) => request(`/admin/affiliates/${id}/reject`, { method: 'POST' }),
+  updateAffiliateTier: (id, tier) => request(`/admin/affiliates/${id}/tier`, { method: 'PUT', body: { tier } }),
+  updateAffiliateCommissionRate: (id, commissionRate) => request(`/admin/affiliates/${id}/commission-rate`, { method: 'PUT', body: { commissionRate } }),
+  getAdminPendingPayouts: () => request('/admin/affiliates/payouts/pending'),
+  approvePayout: (id, transactionId) => request(`/admin/affiliates/payouts/${id}/approve`, { method: 'POST', body: { transactionId } }),
+  rejectPayout: (id) => request(`/admin/affiliates/payouts/${id}/reject`, { method: 'POST' }),
+  autoApproveCommissions: () => request('/admin/affiliates/commissions/auto-approve', { method: 'POST' }),
+
+  // ==========================================
+  // TEACHER MATERIALS API
+  // ==========================================
+  getTeacherMaterials: () => request('/teacher/materials'),
+  createTeacherMaterial: (formData) => request('/teacher/materials', { method: 'POST', body: formData }),
+  updateTeacherMaterial: (id, payload) => request(`/teacher/materials/${id}`, { method: 'PUT', body: payload }),
+  deleteTeacherMaterial: (id) => request(`/teacher/materials/${id}`, { method: 'DELETE' }),
+  submitTeacherMaterial: (id) => request(`/teacher/materials/${id}/submit`, { method: 'POST' }),
+  getPublicMaterials: (filters = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') {
+        params.append(k, String(v));
+      }
+    });
+    return request(`/materials?${params.toString()}`);
+  },
+  getMaterialDetail: (id) => request(`/materials/${id}`),
+  downloadMaterial: (id) => request(`/materials/${id}/download`, { method: 'POST' }),
+
+  // ADMIN MATERIALS MODERATION
+  getAdminPendingMaterials: () => request('/admin/materials/pending'),
+  approveMaterial: (id) => request(`/admin/materials/${id}/approve`, { method: 'POST' }),
+  rejectMaterial: (id) => request(`/admin/materials/${id}/reject`, { method: 'POST' })
 };
 

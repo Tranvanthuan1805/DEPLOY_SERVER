@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from '../utils/toast';
+import DOMPurify from 'dompurify';
 import {
   HiChat, HiHeart, HiSearch, HiPlus, HiArrowLeft, HiUser, HiTag,
   HiCheckCircle, HiDownload, HiUserGroup, HiStar, HiTrendingUp,
@@ -21,46 +22,13 @@ function getFirstImageUrl(text) {
   return match ? match[2] : null;
 }
 
-function renderTextWithImages(text) {
-  if (!text) return null;
-  
-  const regex = /!\[(.*?)\]\((.*?)\)/g;
-  const parts = [];
-  let lastIndex = 0;
-  let match;
-  
-  while ((match = regex.exec(text)) !== null) {
-    const matchIndex = match.index;
-    
-    if (matchIndex > lastIndex) {
-      parts.push(text.substring(lastIndex, matchIndex));
-    }
-    
-    const alt = match[1];
-    const url = match[2];
-    
-    parts.push(
-      <div key={matchIndex} style={{ margin: '10px 0' }}>
-        <img 
-          src={url} 
-          alt={alt || 'Image'} 
-          style={{ maxWidth: '100%', maxHeight: '400px', borderRadius: '8px', border: '1px solid var(--border)', display: 'block' }} 
-        />
-      </div>
-    );
-    
-    lastIndex = regex.lastIndex;
-  }
-  
-  if (lastIndex < text.length) {
-    parts.push(text.substring(lastIndex));
-  }
-  
-  return parts.length > 0 ? (
-    <div style={{ whiteSpace: 'pre-line' }}>
-      {parts.map((part, index) => part)}
-    </div>
-  ) : text;
+function renderSanitizedContent(content) {
+  if (!content) return null;
+  let html = content;
+  html = html.replace(/!\[(.*?)\]\((.*?)\)/g, '<img src="$2" alt="$1" style="max-width:100%; max-height:400px; border-radius:8px; border:1px solid var(--border); display:block; margin:10px 0;" />');
+  html = html.replace(/\n/g, '<br />');
+  const sanitized = DOMPurify.sanitize(html);
+  return <div dangerouslySetInnerHTML={{ __html: sanitized }} />;
 }
 
 export default function Forum({ currentUser }) {
@@ -766,7 +734,7 @@ export default function Forum({ currentUser }) {
 
               <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '12px' }}>{selectedPost.title}</h2>
               <div style={{ fontSize: '15px', color: 'var(--text-secondary)', lineHeight: '1.6', marginBottom: '20px' }}>
-                {renderTextWithImages(selectedPost.content)}
+                {renderSanitizedContent(selectedPost.content)}
               </div>
 
               {/* Resource Download Attachment widget */}
@@ -863,7 +831,7 @@ export default function Forum({ currentUser }) {
                         </div>
 
                         <div style={{ fontSize: '13px', color: 'var(--text-secondary)', paddingLeft: '36px', margin: 0 }}>
-                          {renderTextWithImages(c.content)}
+                          {renderSanitizedContent(c.content)}
                         </div>
 
                         {/* Nesting replies handler */}
@@ -874,7 +842,7 @@ export default function Forum({ currentUser }) {
                                 <span style={{ fontSize: '11.5px', fontWeight: 'bold' }}>{reply.author}</span>
                                 <span style={{ fontSize: '9px', color: 'var(--text-muted)' }}>{new Date(reply.createdAt).toLocaleTimeString()}</span>
                               </div>
-                              <div style={{ fontSize: '12.5px', color: 'var(--text-secondary)', margin: 0 }}>{renderTextWithImages(reply.content)}</div>
+                               <div style={{ fontSize: '12.5px', color: 'var(--text-secondary)', margin: 0 }}>{renderSanitizedContent(reply.content)}</div>
                             </div>
                           ))}
 
