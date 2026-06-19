@@ -1069,7 +1069,7 @@ export default function App() {
 
   const getParsedRoute = () => {
     if (currentPath === '/admin' || currentPath === '/admin/') {
-      return { route: 'admin', tab: 'home' };
+      return { route: 'admin', tab: 'stats' };
     }
     if (currentPath.startsWith('/admin/')) {
       const tab = currentPath.substring(7).replace(/\/$/, '');
@@ -1174,10 +1174,30 @@ export default function App() {
     }
   }, [currentPath, role, previewRole]);
 
+  const handleSetAdminActiveTab = (tab) => {
+    setActiveTab(tab);
+    if (tab === 'stats') {
+      navigateTo('/admin');
+    } else {
+      navigateTo(`/admin/${tab}`);
+    }
+  };
+
+  useEffect(() => {
+    const routeInfo = getParsedRoute();
+    if (routeInfo.route === 'admin' && routeInfo.tab) {
+      setActiveTab(routeInfo.tab);
+    }
+  }, [currentPath]);
+
   // Relational Tables databases in localStorage
   const [usersList, setUsersList] = useState(() => {
-    const list = JSON.parse(localStorage.getItem('users_list')) || initialUsers;
-    if (!list.find(u => u.email.toLowerCase() === 'tranvanthuan2005tt@gmail.com')) {
+    let list = JSON.parse(localStorage.getItem('users_list'));
+    if (!list || !Array.isArray(list)) {
+      list = initialUsers;
+    }
+    const adminExists = list.find(u => u.email && u.email.toLowerCase() === 'tranvanthuan2005tt@gmail.com');
+    if (!adminExists) {
       list.push({
         id: 103,
         name: 'Trần Văn Thuần',
@@ -1190,7 +1210,7 @@ export default function App() {
       });
     } else {
       list.forEach(u => {
-        if (u.email.toLowerCase() === 'tranvanthuan2005tt@gmail.com') {
+        if (u.email && u.email.toLowerCase() === 'tranvanthuan2005tt@gmail.com') {
           u.role = 'admin';
           u.status = 'active';
         }
@@ -1475,21 +1495,19 @@ export default function App() {
   useEffect(() => {
     if (currentPath === '/admin') {
       const token = localStorage.getItem('access_token');
-      const savedUser = JSON.parse(localStorage.getItem('current_user') || 'null');
       
-      if (!token || !savedUser || savedUser.role.toLowerCase() !== 'admin') {
-        toast('Vui lòng đăng nhập tài khoản Quản trị viên để truy cập cơ sở dữ liệu thực!', 'warning');
+      if (!token || !currentUser || currentUser.role?.toLowerCase() !== 'admin') {
+        showToast.current?.('Vui lòng đăng nhập tài khoản Quản trị viên để truy cập cơ sở dữ liệu thực!', 'warning');
         navigateTo('/');
         setActiveTab('login');
       } else {
-        setCurrentUser(savedUser);
         setRole('admin');
         setActiveTab('home');
       }
     } else if (currentPath === '/' && role === 'admin') {
       setActiveTab('landing');
     }
-  }, [currentPath, role]);
+  }, [currentPath, role, currentUser]);
 
   // Sync state data to localStorage
   useEffect(() => {
@@ -1539,14 +1557,16 @@ export default function App() {
       console.warn('[App] Không thể fetch courses:', err);
     }
 
-    try {
-      // 2. Fetch User PRO status
-      const proStatus = await api.checkProStatus();
-      if (proStatus && proStatus.isPro !== currentUser.isPro) {
-        setCurrentUser(prev => prev ? { ...prev, isPro: proStatus.isPro } : null);
+    if (role === 'student' || currentUser.role?.toLowerCase() === 'student') {
+      try {
+        // 2. Fetch User PRO status
+        const proStatus = await api.checkProStatus();
+        if (proStatus && proStatus.isPro !== currentUser.isPro) {
+          setCurrentUser(prev => prev ? { ...prev, isPro: proStatus.isPro } : null);
+        }
+      } catch (err) {
+        // ignore
       }
-    } catch (err) {
-      // ignore
     }
 
     try {
@@ -1576,7 +1596,9 @@ export default function App() {
     if (role === 'admin' || currentUser.role === 'admin') {
       try {
         const dbUsers = await api.getAdminUsers();
-        if (dbUsers) setUsersList(dbUsers);
+        if (dbUsers && Array.isArray(dbUsers.users)) {
+          setUsersList(dbUsers.users);
+        }
       } catch (err) {
         console.warn('[App] Không thể tải danh sách user từ DB:', err);
       }
@@ -1653,15 +1675,16 @@ export default function App() {
     const targetUser = newlyRegisteredUser || user;
     if (targetUser) {
       setUsersList(prev => {
-        const exists = prev.some(u => u.email.toLowerCase() === targetUser.email.toLowerCase());
+        const currentList = Array.isArray(prev) ? prev : [];
+        const exists = currentList.some(u => u.email && u.email.toLowerCase() === (targetUser.email || '').toLowerCase());
         if (!exists) {
           const userWithDate = {
             ...targetUser,
             registeredDate: targetUser.registeredDate || new Date().toISOString().split('T')[0]
           };
-          return [...prev, userWithDate];
+          return [...currentList, userWithDate];
         }
-        return prev;
+        return currentList;
       });
     }
 
@@ -1712,7 +1735,8 @@ export default function App() {
     try {
       await api.changePassword(oldPass, newPass);
       
-      const updatedList = usersList.map(u => u.email === currentUser.email ? { ...u, password: newPass } : u);
+      const currentList = Array.isArray(usersList) ? usersList : [];
+      const updatedList = currentList.map(u => u.email === currentUser.email ? { ...u, password: newPass } : u);
       setUsersList(updatedList);
       
       const updatedUser = { ...currentUser, password: newPass };
@@ -1727,7 +1751,8 @@ export default function App() {
 
   const handleSaveProfile = (updatedProfile) => {
     setCurrentUser(updatedProfile);
-    const updatedList = usersList.map(u => u.email === updatedProfile.email ? updatedProfile : u);
+    const currentList = Array.isArray(usersList) ? usersList : [];
+    const updatedList = currentList.map(u => u.email === updatedProfile.email ? updatedProfile : u);
     setUsersList(updatedList);
     addLog(`Người dùng "${updatedProfile.name}" cập nhật thông tin cá nhân thành công`, 'sys');
     showToast.current('Lưu thông tin cá nhân thành công!', 'success');
@@ -1750,7 +1775,8 @@ export default function App() {
     try {
       await api.changePassword(oldPass, newPass);
 
-      const updatedList = usersList.map(u => u.email === currentUser.email ? { ...u, password: newPass } : u);
+      const currentList = Array.isArray(usersList) ? usersList : [];
+      const updatedList = currentList.map(u => u.email === currentUser.email ? { ...u, password: newPass } : u);
       setUsersList(updatedList);
 
       const updatedUser = { ...currentUser, password: newPass };
@@ -1788,7 +1814,8 @@ export default function App() {
     }
 
     // Add to student's list in users database
-    const updatedUsers = usersList.map(u => {
+    const currentList = Array.isArray(usersList) ? usersList : [];
+    const updatedUsers = currentList.map(u => {
       if (u.email === currentUser.email) {
         const unlocked = u.unlockedCourses || [];
         const newUnlocked = Array.from(new Set([
@@ -1827,7 +1854,8 @@ export default function App() {
   // Student upgrades to PRO membership success
   const handleUpgradeSuccess = () => {
     // 1. Update in the local users database list
-    const updatedUsers = usersList.map(u => {
+    const currentList = Array.isArray(usersList) ? usersList : [];
+    const updatedUsers = currentList.map(u => {
       if (u.email === currentUser.email) {
         return { ...u, isPro: true };
       }
@@ -1938,18 +1966,27 @@ export default function App() {
     try {
       const res = await api.banAdminUser(userId);
       if (res) {
-        setUsersList(prev => prev.map(u => u.id === userId ? { ...u, isBanned: res.isBanned } : u));
+        setUsersList(prev => {
+          const currentList = Array.isArray(prev) ? prev : [];
+          return currentList.map(u => u.id === userId ? { ...u, isBanned: res.isBanned } : u);
+        });
         addLog(`Cập nhật trạng thái tài khoản ID ${userId}: ${res.isBanned ? 'Khóa' : 'Hoạt động'} thành công`, 'sys');
       }
     } catch (err) {
       console.error('[App] Lỗi toggle ban user in DB:', err);
       // fallback
-      setUsersList(prev => prev.map(u => u.id === userId ? { ...u, isBanned: !u.isBanned } : u));
+      setUsersList(prev => {
+        const currentList = Array.isArray(prev) ? prev : [];
+        return currentList.map(u => u.id === userId ? { ...u, isBanned: !u.isBanned } : u);
+      });
     }
   };
 
   const handleApproveTeacher = (teacherName, subject) => {
-    setUsersList(prev => prev.map(u => u.name === teacherName ? { ...u, status: 'active' } : u));
+    setUsersList(prev => {
+      const currentList = Array.isArray(prev) ? prev : [];
+      return currentList.map(u => u.name === teacherName ? { ...u, status: 'active' } : u);
+    });
   };
 
   const handleApproveCourse = (courseId) => {
@@ -2130,9 +2167,9 @@ export default function App() {
               </button>
               <div className="mock-exams-user-profile">
                 <div className="mock-exams-user-avatar">
-                  {currentUser.avatar || currentUser.name?.substring(0, 2).toUpperCase() || 'HS'}
+                  {currentUser.avatar || (currentUser.fullName || currentUser.name)?.substring(0, 2).toUpperCase() || 'HS'}
                 </div>
-                <span className="mock-exams-user-name">{currentUser.name}</span>
+                <span className="mock-exams-user-name">{currentUser.fullName || currentUser.name}</span>
               </div>
             </div>
           )}
@@ -2295,6 +2332,137 @@ export default function App() {
               handleLogout={handleLogout}
               addLog={addLog}
             />
+          )}
+
+          {/* ================= MOCK EXAMS ROUTER WORKSPACE (PUBLIC ACCESS) ================= */}
+          {parsedRoute.route.startsWith('mock-') && (
+            <div className="mock-exams-workspace-wrapper" style={{ padding: '20px 0' }}>
+              {parsedRoute.route === 'mock-exams-list' && (
+                <MockExamsPage
+                  currentUser={currentUser}
+                  onSelectExam={(examId) => navigateTo(`/mock-exams/${examId}`)}
+                  navigateTo={navigateTo}
+                  examsList={examsList}
+                />
+              )}
+
+              {parsedRoute.route === 'mock-exam-detail' && (
+                <MockExamDetailPage
+                  examId={parsedRoute.examId}
+                  currentUser={currentUser}
+                  onStartExam={(examId) => navigateTo(`/mock-exams/${examId}/start`)}
+                  navigateTo={navigateTo}
+                />
+              )}
+
+              {parsedRoute.route === 'mock-exam-taking' && (
+                <MockExamTakingPage
+                  examId={parsedRoute.examId}
+                  currentUser={currentUser}
+                  onFinished={(examId, attemptId) => navigateTo(`/mock-exams/${examId}/result/${attemptId}`)}
+                  navigateTo={navigateTo}
+                />
+              )}
+
+              {parsedRoute.route === 'mock-exam-result' && (
+                <MockExamResultPage
+                  examId={parsedRoute.examId}
+                  attemptId={parsedRoute.attemptId}
+                  currentUser={currentUser}
+                  navigateTo={navigateTo}
+                />
+              )}
+            </div>
+          )}
+
+          {/* ================= COURSES ROUTER WORKSPACE ================= */}
+          {role !== 'guest' && activeTab !== 'landing' && (parsedRoute.route === 'courses-list' || parsedRoute.route === 'course-detail') && (
+            <div style={{ padding: '20px 0' }}>
+              {parsedRoute.route === 'courses-list' && (
+                role === 'student' ? (
+                  <div className="cp-page-container">
+                    <div className="cp-page animate-in">
+                      <CourseMall
+                        courses={courses}
+                        currentUser={currentUser}
+                        onSelectCourse={(course) => navigateTo(`/courses/${course.id}`)}
+                        onLearnCourse={(course) => navigateTo(`/learn/${course.id}`)}
+                        onCheckoutCourse={(course) => setCheckoutCourse(course)}
+                        onRegisterLead={handleRegisterLead}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <CoursesPage
+                    courses={courses}
+                    currentUser={currentUser}
+                    onSelectCourse={(course) => navigateTo(`/courses/${course.id}`)}
+                    onCheckoutCourse={(course) => setCheckoutCourse(course)}
+                    navigateTo={navigateTo}
+                  />
+                )
+              )}
+
+              {parsedRoute.route === 'course-detail' && (
+                <CourseDetailPage
+                  courseId={parsedRoute.courseId}
+                  currentUser={currentUser}
+                  onNavigateToLearn={(courseId, lessonId, isDemo = false) => {
+                    const demoQuery = isDemo ? '?demo=true' : '';
+                    navigateTo(`/learn/${courseId}${lessonId ? `/lesson/${lessonId}` : ''}${demoQuery}`);
+                  }}
+                  onUpdateUser={(updated) => {
+                    setCurrentUser(updated);
+                    const currentList = Array.isArray(usersList) ? usersList : [];
+                    const updatedList = currentList.map(u => u.email === updated.email ? updated : u);
+                    setUsersList(updatedList);
+                  }}
+                  navigateTo={navigateTo}
+                  onAddToCart={handleAddToCart}
+                  onCheckoutCourse={(course) => setCheckoutCourse(course)}
+                />
+              )}
+            </div>
+          )}
+
+          {/* ================= AI TUTOR WORKSPACE ================= */}
+          {parsedRoute.route === 'ai-tutor' && (
+            <div style={{ padding: '0', background: '#141410', minHeight: '100vh' }}>
+              <AITutorPage
+                currentUser={currentUser}
+                navigateTo={navigateTo}
+                addLog={addLog}
+              />
+            </div>
+          )}
+
+          {/* ================= FLASHCARDS WORKSPACE ================= */}
+          {parsedRoute.route === 'flashcards' && (
+            <div style={{ padding: '0', background: '#141410', minHeight: '100vh' }}>
+              <FlashcardPage
+                currentUser={currentUser}
+                navigateTo={navigateTo}
+                addLog={addLog}
+              />
+            </div>
+          )}
+
+          {/* ================= EXAM BANK PAGE ================= */}
+          {parsedRoute.route === 'exam-bank' && (
+            <div style={{ padding: '0' }}>
+              <ExamBankPage
+                currentUser={currentUser}
+                navigateTo={navigateTo}
+              />
+            </div>
+          )}
+
+          {/* ================= FORUM WORKSPACE ================= */}
+          {parsedRoute.route === 'forum' && (
+            <div style={{ padding: '0' }}>
+              <Forum currentUser={currentUser} />
+            </div>
+>>>>>>> theirs
           )}
 
           {/* ================= STUDENT LEARNING WORKSPACE ================= */}
@@ -3442,7 +3610,6 @@ export default function App() {
               )}
             </RouteGuard>
           )}
-
           {/* ================= AFFILIATE WORKSPACE ================= */}
           {effectiveRole === 'affiliate' && parsedRoute.route === 'dashboard' && (
             <RouteGuard allowedRoles={['AFFILIATE', 'ADMIN']} currentUser={currentUser}>
