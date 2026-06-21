@@ -205,6 +205,7 @@ export default function TeacherDashboard({
   };
 
   const handleEditCourseClick = (course) => {
+    setSelectedCourseId(course.id);
     setCTitle(course.title || '');
     setCDescription(course.description || '');
     setCSubject(course.subject || 'Toán học');
@@ -1727,6 +1728,229 @@ export default function TeacherDashboard({
                     </button>
                   </div>
                 </form>
+
+                {courseEditMode === 'edit' && (
+                  <div style={{ marginTop: '32px', borderTop: '3px solid #000000', paddingTop: '24px' }}>
+                    <div className="tdb-card" style={{ background: '#fffbeb', border: '3px solid #000000', boxShadow: '5px 5px 0px #000000', borderRadius: '16px', padding: '24px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2.5px solid #fcd34d', paddingBottom: '14px', marginBottom: '16px' }}>
+                        <h3 className="tdb-card-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', fontSize: '16px', fontWeight: '950' }}>
+                          📝 QUẢN LÝ BÀI GIẢNG HỌC TẬP
+                        </h3>
+                        {selectedCourseId && lessonEditMode === 'idle' && (
+                          <button 
+                            type="button"
+                            onClick={handleCreateLessonClick}
+                            className="tdb-upgrade-btn"
+                            style={{ width: 'auto', background: '#fff', color: '#000', border: '2px solid #000', padding: '6px 12px', fontSize: '11.5px', boxShadow: 'none' }}
+                          >
+                            ➕ Thêm bài học mới
+                          </button>
+                        )}
+                      </div>
+
+                      {selectedCourseId ? (
+                        (() => {
+                          const course = courses.find(c => c.id === selectedCourseId);
+                          if (!course) return null;
+                          const lessons = course.lessons || [];
+
+                          if (lessonEditMode === 'create' || lessonEditMode === 'edit') {
+                            return (
+                              <div style={{ background: '#ffffff', padding: '16px', borderRadius: '12px', border: '2px solid #000' }}>
+                                <h4 style={{ fontSize: '13.5px', fontWeight: 'bold', margin: '0 0 12px 0', borderBottom: '1px dashed #cbd5e1', paddingBottom: '8px' }}>
+                                  {lessonEditMode === 'create' ? '➕ THÊM BÀI HỌC MỚI' : '✏️ CHỈNH SỬA BÀI HỌC'}
+                                </h4>
+
+                                <form onSubmit={handleSaveLessonSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    <label style={{ fontSize: '11.5px', fontWeight: 'bold' }}>Tên tiêu đề bài học:</label>
+                                    <input 
+                                      type="text" 
+                                      className="tdb-search-input" 
+                                      style={{ width: '100%', borderRadius: '8px', border: '1.5px solid #000' }} 
+                                      placeholder="Ví dụ: Bài 1: Este hóa và cấu trúc phân tử..."
+                                      value={lTitle}
+                                      onChange={e => setLTitle(e.target.value)}
+                                      required
+                                    />
+                                  </div>
+
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '10px' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                      <label style={{ fontSize: '11.5px', fontWeight: 'bold' }}>Thời lượng (phút):</label>
+                                      <input 
+                                        type="text" 
+                                        className="tdb-search-input" 
+                                        style={{ width: '100%', borderRadius: '8px', border: '1.5px solid #000' }} 
+                                        placeholder="Ví dụ: 15m hoặc 25 phút"
+                                        value={lDuration}
+                                        onChange={e => setLDuration(e.target.value)}
+                                        required
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                    <label style={{ fontSize: '11.5px', fontWeight: 'bold', color: '#0f172a' }}>Video bài giảng học tập:</label>
+                                    <div style={{ 
+                                      border: '2px dashed #000000', borderRadius: '12px', background: '#ffffff', padding: '12px', 
+                                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                                      minHeight: '100px'
+                                    }}>
+                                      {lVideoUrl ? (
+                                        <div style={{ position: 'relative', width: '100%' }}>
+                                          <video src={lVideoUrl} controls style={{ width: '100%', maxHeight: '120px', borderRadius: '8px', border: '1.5px solid #000000', background: '#000' }} />
+                                          <button 
+                                            type="button" 
+                                            onClick={() => setLVideoUrl('')}
+                                            style={{ position: 'absolute', top: '4px', right: '4px', border: '1.5px solid #000000', background: '#fee2e2', color: '#ef4444', borderRadius: '50%', width: '22px', height: '22px', cursor: 'pointer', fontWeight: 'bold', fontSize: '10px', zIndex: 5 }}
+                                          >
+                                            ✕
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                          <span style={{ fontSize: '24px' }}>🎥</span>
+                                          <span style={{ fontSize: '10px', color: '#64748b', fontWeight: '600', margin: '2px 0 6px 0' }}>Hỗ trợ MP4, MOV (Tối đa 50MB)</span>
+                                          <button 
+                                            type="button" 
+                                            disabled={lVideoUploading}
+                                            onClick={() => document.getElementById('course-trailer-upload-inline').click()}
+                                            className="tdb-upgrade-btn"
+                                            style={{ width: 'auto', background: '#fff', color: '#000', border: '2px solid #000', padding: '4px 10px', fontSize: '11px', boxShadow: 'none' }}
+                                          >
+                                            {lVideoUploading ? '⏳ Đang tải...' : 'Tải video từ máy'}
+                                          </button>
+                                          <input 
+                                            type="file" 
+                                            id="course-trailer-upload-inline" 
+                                            accept="video/mp4,video/quicktime" 
+                                            onChange={handleLessonVideoChange} 
+                                            style={{ display: 'none' }} 
+                                          />
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    <label style={{ fontSize: '11.5px', fontWeight: 'bold' }}>Tài liệu đính kèm (URL file hoặc Nội dung):</label>
+                                    <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                                      <input 
+                                        type="text" 
+                                        className="tdb-search-input" 
+                                        style={{ flex: 1, borderRadius: '8px', border: '1.5px solid #000' }} 
+                                        placeholder="Link tài liệu đính kèm..."
+                                        value={lContent}
+                                        onChange={e => setLContent(e.target.value)}
+                                      />
+                                      <button 
+                                        type="button" 
+                                        disabled={lDocUploading}
+                                        onClick={() => document.getElementById('course-doc-upload-inline').click()}
+                                        className="tdb-upgrade-btn"
+                                        style={{ width: 'auto', background: '#f8fafc', color: '#000', border: '1.5px solid #000', padding: '6px 12px', boxShadow: 'none' }}
+                                      >
+                                        {lDocUploading ? '⏳ Đang tải...' : 'Upload File'}
+                                      </button>
+                                      <input 
+                                        type="file" 
+                                        id="course-doc-upload-inline" 
+                                        accept=".pdf,.doc,.docx,.zip,.rar" 
+                                        onChange={handleLessonDocChange} 
+                                        style={{ display: 'none' }} 
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+                                    <button type="submit" className="tdb-upgrade-btn" style={{ flex: 1, background: '#10b981', color: '#fff', border: '1.5px solid #000', boxShadow: 'none' }}>
+                                      💾 Lưu bài học
+                                    </button>
+                                    <button type="button" onClick={() => setLessonEditMode('idle')} className="tdb-upgrade-btn" style={{ flex: 1, background: '#ffffff', color: '#ef4444', border: '1.5px solid #000', boxShadow: 'none' }}>
+                                      Hủy bỏ
+                                    </button>
+                                  </div>
+                                </form>
+                              </div>
+                            );
+                          }
+
+                          if (lessons.length === 0) {
+                            return (
+                              <div style={{ padding: '24px', textAlign: 'center', color: '#64748b' }}>
+                                📭 Khóa học này chưa có bài học nào. Nhấp "+ Thêm bài học mới" để tạo bài học đầu tiên!
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {lessons.map((lesson, idx) => (
+                                  <div 
+                                    key={lesson.id}
+                                    style={{ 
+                                      padding: '10px 14px', border: '1.5px solid #000000', borderRadius: '10px', background: '#fff',
+                                      display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                                    }}
+                                  >
+                                    <div style={{ textAlign: 'left' }}>
+                                      <span style={{ fontSize: '12.5px', fontWeight: '800', color: '#0f172a', display: 'block' }}>
+                                        {idx + 1}. {lesson.name || lesson.title}
+                                      </span>
+                                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '600' }}>
+                                        Thời lượng: {lesson.duration || '15m'} 
+                                        {lesson.videoUrl && ' • 🎥 Có video'}
+                                        {lesson.content && ' • 📄 Có tài liệu'}
+                                      </span>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '4px' }}>
+                                      <button 
+                                        type="button"
+                                        onClick={() => moveLesson(course.id, idx, -1)}
+                                        disabled={idx === 0}
+                                        style={{ padding: '4px 6px', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer', opacity: idx === 0 ? 0.3 : 1 }}
+                                        title="Di chuyển lên"
+                                      >
+                                        <HiArrowUp />
+                                      </button>
+                                      <button 
+                                        type="button"
+                                        onClick={() => moveLesson(course.id, idx, 1)}
+                                        disabled={idx === lessons.length - 1}
+                                        style={{ padding: '4px 6px', background: '#fff', border: '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer', opacity: idx === lessons.length - 1 ? 0.3 : 1 }}
+                                        title="Di chuyển xuống"
+                                      >
+                                        <HiArrowDown />
+                                      </button>
+                                      <button 
+                                        type="button"
+                                        onClick={() => handleEditLessonClick(lesson)}
+                                        style={{ padding: '4px 6px', background: '#fffbeb', border: '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer', color: '#d97706' }}
+                                        title="Chỉnh sửa bài học"
+                                      >
+                                        <HiPencil />
+                                      </button>
+                                      <button 
+                                        type="button"
+                                        onClick={() => handleDeleteLessonReal(lesson.id)}
+                                        style={{ padding: '4px 6px', background: '#fee2e2', border: '1px solid #cbd5e1', borderRadius: '4px', cursor: 'pointer', color: '#ef4444' }}
+                                        title="Xóa bài học"
+                                      >
+                                        <HiTrash />
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()
+                      ) : null}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '24px' }}>
