@@ -808,19 +808,44 @@ export default function LandingPage({
 
     try {
       setLeadSubmitting(true);
-      await api.createAdminLead({
+      
+      const payload = {
         name: leadName.trim(),
         email: leadEmail.trim(),
         phone: leadPhone.trim(),
         target: 'Nhận tài liệu luyện thi miễn phí'
-      });
+      };
+
+      // 1. Submit to local Database via API
+      try {
+        await api.createAdminLead(payload);
+      } catch (dbErr) {
+        console.error('Lỗi khi lưu lead vào Database:', dbErr);
+      }
+
+      // 2. Submit to Google Sheets webhook if configured
+      const googleSheetUrl = import.meta.env.VITE_GOOGLE_SHEET_WEBHOOK_URL;
+      if (googleSheetUrl) {
+        try {
+          await fetch(googleSheetUrl, {
+            method: 'POST',
+            mode: 'no-cors', // Standard CORS mode for Google Apps Script Web App bypass
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+          });
+        } catch (sheetErr) {
+          console.error('Lỗi khi gửi lead lên Google Sheets:', sheetErr);
+        }
+      }
+
       toast('Đăng ký nhận tài liệu thành công! Tài liệu luyện thi đã được gửi tới email của bạn.', 'success');
       setLeadName('');
       setLeadEmail('');
       setLeadPhone('');
     } catch (err) {
       console.error(err);
-      // Fallback in case user is guest / not authenticated
       toast('Đăng ký nhận tài liệu thành công! Tài liệu luyện thi đã được gửi tới email của bạn.', 'success');
       setLeadName('');
       setLeadEmail('');
