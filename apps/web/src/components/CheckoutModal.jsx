@@ -17,7 +17,7 @@ export default function CheckoutModal({ courses = [], onClose, onPaymentSuccess,
 
   const currentUser = JSON.parse(localStorage.getItem('current_user')) || {};
   const studentId = currentUser.id || 1;
-  const transferCode = `EP${studentId}CRT`;
+  const transferCode = courses.length > 0 ? `EP${studentId}C${courses[0].id}` : `EP${studentId}CRT`;
 
   // Helper function to parse course price to actual VND
   const parsePrice = (priceVal) => {
@@ -139,13 +139,8 @@ export default function CheckoutModal({ courses = [], onClose, onPaymentSuccess,
     const courseId = courses[0]?.id;
 
     if (!token || !courseId) {
-      // Fallback to simulation in mock/demo mode when no token is present
-      setTimeout(() => {
-        addLog(`[Demo Mode] Xác nhận thành công! Đã kích hoạt quyền sở hữu nhóm khóa học.`, 'sys');
-        setStep(4);
-        onPaymentSuccess(courses.map(c => c.id));
-        setIsVerifying(false);
-      }, 1500);
+      setPollingError('Vui lòng đăng nhập để thực hiện giao dịch!');
+      setIsVerifying(false);
       return;
     }
 
@@ -164,16 +159,12 @@ export default function CheckoutModal({ courses = [], onClose, onPaymentSuccess,
         setStep(4);
         onPaymentSuccess(courses.map(c => c.id));
       } else {
-        // In demo/development, if the webhook isn't fully set up or processing, automatically approve to proceed.
-        addLog(`[SePay] Giao dịch "${transferCode}" chưa xuất hiện. Tự động mô phỏng thanh toán thành công...`, 'sys');
-        setStep(4);
-        onPaymentSuccess(courses.map(c => c.id));
+        addLog(`[SePay] Giao dịch "${transferCode}" chưa xuất hiện.`, 'sys');
+        setPollingError('Hệ thống chưa nhận được giao dịch chuyển khoản của em. Vui lòng đợi từ 1-2 phút sau khi chuyển khoản thành công và kiểm tra lại.');
       }
     } catch (err) {
-      // If backend is offline or network error, fallback to simulation so flow is not blocked!
-      addLog(`[SePay] Lỗi kết nối máy chủ. Tự động mô phỏng thanh toán thành công...`, 'sys');
-      setStep(4);
-      onPaymentSuccess(courses.map(c => c.id));
+      console.error(err);
+      setPollingError('Lỗi kết nối máy chủ. Vui lòng kiểm tra lại đường truyền mạng của em.');
     } finally {
       setIsVerifying(false);
     }
